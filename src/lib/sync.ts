@@ -18,10 +18,11 @@ export function useSync() {
     let stop = false;
     async function run() {
       try {
+        const sentDeleted = getState().deletedProjects;
         const res = await fetch("/api/sync", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ references: getState().references }),
+          body: JSON.stringify({ references: getState().references, projects: getState().projects, deleted: sentDeleted }),
         });
         const j = await res.json().catch(() => ({}));
         if (stop) return;
@@ -46,9 +47,14 @@ export function useSync() {
             if (st && r.study?.at !== st.at) { changed = true; return { ...r, study: st }; }
             return r;
           });
-          const have = new Set(s.projects.map((p) => p.id));
-          const incoming = ((j.contents ?? []) as Project[]).filter((p) => !have.has(p.id));
-          if (incoming.length) changed = true;
+          const gone = new Set(s.deletedProjects);
+          const server = (j.contents ?? []) as Project[];
+          const local = new Map(s.projects.map((p) => [p.id, p]));
+          const incoming = server.filter((p) => !local.has(p.id) && !gone.has(p.id));
+          const replaced = new Map(server.filter((p) => local.has(p.id) && (p.updatedAt ?? 0) > local.get(p.id)!.updatedAt).map((p) => [p.id, p]));
+          if (incoming.length || replaced.size) changed = true;
+          if (sentDeleted.length) changed = true;
+          const projects = [...incoming, ...s.projects.map((p) => replaced.get(p.id) ?? p)];
           const styles = s.styles.map((st) => {
             const r = remote.get(st.id) as Partial<Style> | undefined;
             if (r && typeof r.rev === "number" && r.rev > st.rev && r.status) {
@@ -58,7 +64,7 @@ export function useSync() {
             return st;
           });
           if (!changed) return s;
-          return { ...s, styles, references, projects: [...incoming, ...s.projects], claude: { ...s.claude, used: !!j.used, syncError: undefined } };
+          return { ...s, styles, references, projects, deletedProjects: s.deletedProjects.filter((x) => !sentDeleted.includes(x)), claude: { ...s.claude, used: !!j.used, syncError: undefined } };
         });
       } catch {
         /* sem rede: tenta de novo no próximo ciclo */

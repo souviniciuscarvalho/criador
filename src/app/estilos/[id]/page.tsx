@@ -45,6 +45,9 @@ export default function EstiloPage() {
         <button className="btn" disabled={!state.claude.token} onClick={() => { navigator.clipboard?.writeText(prompt); setCopied(true); setTimeout(() => setCopied(false), 1800); }}>
           {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Copiado! Cole no Claude" : "Treinar com o Claude"}
         </button>
+        <button className="btn btn-ghost" onClick={() => setState((x) => ({ ...x, defaultStyleId: x.defaultStyleId === st.id ? "" : st.id }))}>
+          {state.defaultStyleId === st.id ? "Padrão ✓" : "Usar como padrão"}
+        </button>
         <button className="btn btn-ghost" onClick={() => {
           if (!confirm("Excluir este estilo?")) return;
           removeStyleRemote(st.id);

@@ -27,6 +27,23 @@ export interface Slide {
   align: "left" | "center";
   titleSize: number; // px no canvas real (1080 de largura)
   bodySize: number;
+  imageIdea?: string; // ideia de imagem (opcional)
+  font?: string; // fonte do estilo (se instalada no aparelho)
+  pieces?: Piece[]; // componentes do estilo aplicados
+}
+
+export interface Piece {
+  id: string;
+  text: string;
+  bg: string;
+  fg: string;
+}
+
+export interface Note {
+  score: number;
+  summary: string;
+  tips: string[];
+  at: number;
 }
 
 export interface Project {
@@ -38,6 +55,11 @@ export interface Project {
   slides: Slide[];
   referenceIds: string[];
   updatedAt: number;
+  caption?: string;
+  styleId?: string;
+  mode?: "normal" | "continuo";
+  stage?: "texto" | "visual";
+  note?: Note;
 }
 
 export interface Study {
@@ -103,6 +125,8 @@ export interface AppState {
   projects: Project[];
   references: Reference[];
   styles: Style[];
+  deletedProjects: string[];
+  defaultStyleId: string;
   claude: ClaudeConnection;
   connections: Connections;
 }
@@ -135,5 +159,8 @@ export function newProject(format: FormatKind = "carrossel"): Project {
     slides: [newSlide()],
     referenceIds: [],
     updatedAt: Date.now(),
+    caption: "",
+    mode: "normal",
+    stage: "texto",
   };
 }

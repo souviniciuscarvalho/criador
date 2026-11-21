@@ -24,7 +24,8 @@ export function drawSlide(canvas: HTMLCanvasElement, s: Slide, width: number, he
   ctx.fillRect(0, 0, width, height);
   const pad = Math.round(width * 0.09);
   const maxW = width - pad * 2;
-  const font = "system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif";
+  const base = "system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif";
+  const font = s.font ? `"${s.font.replace(/"/g, "")}", ${base}` : base;
   ctx.textBaseline = "top";
   ctx.textAlign = s.align;
   const x = s.align === "center" ? width / 2 : pad;
@@ -36,7 +37,10 @@ export function drawSlide(canvas: HTMLCanvasElement, s: Slide, width: number, he
   const bl = wrap(ctx, s.body, maxW);
   const bh = bl.length * s.bodySize * 1.4;
   const gap = s.body ? 48 : 0;
-  const total = th + gap + bh + 12;
+  const pieces = s.pieces ?? [];
+  const pieceH = 84;
+  const piecesH = pieces.length ? pieces.length * (pieceH + 16) + 24 : 0;
+  const total = th + gap + bh + 12 + piecesH;
   let y = Math.max(pad, (height - total) / 2);
 
   ctx.fillStyle = s.accent;
@@ -57,6 +61,21 @@ export function drawSlide(canvas: HTMLCanvasElement, s: Slide, width: number, he
     y += s.bodySize * 1.4;
   }
   ctx.globalAlpha = 1;
+
+  // componentes do estilo (tiras)
+  y += 24;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  for (const p of pieces) {
+    ctx.font = `800 52px ${font}`;
+    const w = Math.min(maxW, ctx.measureText(p.text).width + 64);
+    const px = s.align === "center" ? (width - w) / 2 : pad;
+    ctx.fillStyle = p.bg;
+    ctx.fillRect(px, y, w, pieceH);
+    ctx.fillStyle = p.fg;
+    ctx.fillText(p.text, px + 32, y + pieceH / 2 + 2, maxW - 64);
+    y += pieceH + 16;
+  }
 }
 
 export async function downloadSlides(slides: Slide[], w: number, h: number, base: string) {

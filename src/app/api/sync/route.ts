@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dbConfigured, deleteMissing, listRows, listStyles, upsertRows, validToken, wasUsed, workspaceOf } from "@/lib/server/db";
+import { dbConfigured, deleteContents, deleteMissing, listRows, listStyles, upsertRows, validToken, wasUsed, workspaceOf } from "@/lib/server/db";
 import type { Project, Reference } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   if (!dbConfigured()) return NextResponse.json({ configured: false }, { status: 503 });
   try {
     const ws = workspaceOf(token);
-    const body = (await req.json()) as { references?: Reference[] };
+    const body = (await req.json()) as { references?: Reference[]; projects?: Project[]; deleted?: string[] };
     const incoming = Array.isArray(body.references) ? body.references.filter((r) => r && typeof r.id === "string") : [];
     const server = await listRows<Reference>("criador_references", ws);
     const byId = new Map(server.map((r) => [r.id, r]));
@@ -23,6 +23,14 @@ export async function POST(req: Request) {
     });
     await upsertRows("criador_references", ws, merged, { updated_at: new Date().toISOString() });
     await deleteMissing("criador_references", ws, merged.map((r) => r.id));
+    // conteúdos: vence a versão mais recente (updatedAt); exclusões vão por lista
+    if (Array.isArray(body.deleted)) await deleteContents(ws, body.deleted.filter((x): x is string => typeof x === "string"));
+    const current = new Map((await listRows<Project>("criador_contents", ws)).map((p) => [p.id, p]));
+    const sendProjects = (Array.isArray(body.projects) ? body.projects : []).filter(
+      (p) => p && typeof p.id === "string" && /^[a-z0-9]{4,40}$/.test(p.id) && Array.isArray(p.slides) && !(body.deleted ?? []).includes(p.id),
+    );
+    const newer = sendProjects.filter((p) => !current.has(p.id) || (p.updatedAt ?? 0) > (current.get(p.id)!.updatedAt ?? 0));
+    await upsertRows("criador_contents", ws, newer, { source: "app" });
     const [contents, used, styles] = await Promise.all([listRows<Project>("criador_contents", ws), wasUsed(ws), listStyles(ws)]);
     return NextResponse.json({ configured: true, used, studies: merged.filter((r) => r.study?.source === "claude").map((r) => ({ id: r.id, study: r.study })), contents, styles });
   } catch (e) {

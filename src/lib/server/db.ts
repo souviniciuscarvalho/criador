@@ -98,3 +98,9 @@ export async function listPrints(ws: string, styleId: string): Promise<string[]>
   const r = await rest(`criador_prints?workspace=eq.${q(ws)}&style_id=eq.${q(styleId)}&select=data&order=idx.asc&limit=12`);
   return (r ?? []).map((x: { data: string }) => x.data);
 }
+
+export async function deleteContents(ws: string, ids: string[]) {
+  const list = ids.filter((i) => /^[a-z0-9]{4,40}$/.test(i));
+  if (!list.length) return;
+  await rest(`criador_contents?workspace=eq.${q(ws)}&id=in.(${list.map((i) => `"${i}"`).join(",")})`, { method: "DELETE", prefer: "return=minimal" });
+}

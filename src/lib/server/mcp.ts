@@ -6,6 +6,44 @@ type Json = Record<string, unknown>;
 const str = (v: unknown, d = "") => (typeof v === "string" ? v : d);
 const color = (v: unknown, d: string) => (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v : d);
 
+type StyleLike = Record<string, unknown> | null;
+
+// Slide inicial: usa a 1ª recriação do estilo (cores/alinhamento) ou a paleta.
+function baseSlide(style: StyleLike): Slide {
+  const rec = (style?.recreated as Slide[] | undefined)?.[0];
+  const pal = (style?.palette as string[] | undefined) ?? [];
+  const font = (style?.fonts as { title?: string } | undefined)?.title || undefined;
+  return {
+    id: uid(),
+    title: "",
+    body: "",
+    bg: rec?.bg ?? pal[0] ?? "#111827",
+    fg: rec?.fg ?? "#f9fafb",
+    accent: rec?.accent ?? pal[1] ?? "#a78bfa",
+    align: rec?.align ?? "left",
+    titleSize: 84,
+    bodySize: 44,
+    font,
+  };
+}
+
+function applySlide(base: Slide, u: Json, merge = false): Slide {
+  const out: Slide = { ...base };
+  if (!merge || "titulo" in u) out.title = str(u.titulo).slice(0, 200);
+  if (!merge || "texto" in u) out.body = str(u.texto).slice(0, 800);
+  if ("ideia_imagem" in u) out.imageIdea = str(u.ideia_imagem).slice(0, 400);
+  out.bg = color(u.fundo, out.bg);
+  out.fg = color(u.cor_texto, out.fg);
+  out.accent = color(u.destaque, out.accent);
+  if (u.alinhamento === "center" || u.alinhamento === "left") out.align = u.alinhamento;
+  const n = (v: unknown, lo: number, hi: number, d: number) => (typeof v === "number" && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d);
+  out.titleSize = n(u.tamanho_titulo, 40, 160, out.titleSize);
+  out.bodySize = n(u.tamanho_texto, 24, 90, out.bodySize);
+  if (Array.isArray(u.pecas))
+    out.pieces = (u.pecas as Json[]).slice(0, 4).map((p) => ({ id: uid(), text: str(p.texto).slice(0, 80), bg: color(p.fundo, out.accent), fg: color(p.cor_texto, "#111111") }));
+  return out;
+}
+
 export const TOOLS = [
   {
     name: "listar_referencias",
@@ -28,30 +66,82 @@ export const TOOLS = [
   },
   {
     name: "criar_conteudo",
-    description: "Cria um conteúdo no Criador (feed, story ou carrossel). Cada slide tem título e texto; cores são opcionais (#rrggbb). O conteúdo aparece na aba Criar em alguns segundos.",
+    description: "Cria um conteúdo no Criador (feed, story ou carrossel). Cada slide tem título e texto; cores são opcionais (#rrggbb). Aparece na aba Criar em alguns segundos.",
     inputSchema: {
       type: "object",
       properties: {
         titulo: { type: "string" },
         formato: { type: "string", enum: ["feed", "story", "carrossel", "quadrado"] },
+        legenda: { type: "string", description: "Legenda do post (opcional)" },
+        estilo_id: { type: "string", description: "Estilo a aplicar (veja listar_estilos)" },
+        modo: { type: "string", enum: ["normal", "continuo"] },
         referencias: { type: "array", items: { type: "string" }, description: "ids das referências usadas" },
+        slides: { type: "array", items: { type: "object", properties: {
+              titulo: { type: "string", description: "Texto principal do slide" },
+              texto: { type: "string", description: "Texto de apoio (opcional)" },
+              ideia_imagem: { type: "string", description: "Ideia de imagem (opcional)" },
+              fundo: { type: "string" },
+              cor_texto: { type: "string" },
+              destaque: { type: "string" },
+              alinhamento: { type: "string", enum: ["left", "center"] },
+            }, required: ["titulo"] } },
+      },
+      required: ["titulo", "formato", "slides"],
+    },
+  },
+  {
+    name: "ler_conteudo",
+    description: "Lê um conteúdo do Criador (texto, legenda, estilo e visual de cada slide). Use antes de montar o visual ou dar nota.",
+    inputSchema: { type: "object", properties: { conteudo_id: { type: "string" } }, required: ["conteudo_id"] },
+  },
+  {
+    name: "atualizar_conteudo",
+    description:
+      "Atualiza um conteúdo existente: título, legenda, estilo, modo e/ou slides. Em slides, cada item tem indice (começa em 0; use o próximo número para acrescentar) e só os campos que mudam. Use para montar o VISUAL (fundo, cor_texto, destaque, alinhamento, tamanho_titulo, tamanho_texto, pecas) sem mexer no texto aprovado.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        conteudo_id: { type: "string" },
+        titulo: { type: "string" },
+        legenda: { type: "string" },
+        estilo_id: { type: "string" },
+        modo: { type: "string", enum: ["normal", "continuo"] },
+        etapa: { type: "string", enum: ["texto", "visual"], description: "Use visual quando terminar de montar o visual" },
         slides: {
           type: "array",
           items: {
             type: "object",
             properties: {
+              indice: { type: "number" },
               titulo: { type: "string" },
               texto: { type: "string" },
+              ideia_imagem: { type: "string" },
               fundo: { type: "string" },
               cor_texto: { type: "string" },
               destaque: { type: "string" },
               alinhamento: { type: "string", enum: ["left", "center"] },
+              tamanho_titulo: { type: "number" },
+              tamanho_texto: { type: "number" },
+              pecas: {
+                type: "array",
+                description: "Componentes do estilo aplicados (tiras com texto)",
+                items: { type: "object", properties: { texto: { type: "string" }, fundo: { type: "string" }, cor_texto: { type: "string" } }, required: ["texto"] },
+              },
             },
-            required: ["titulo"],
+            required: ["indice"],
           },
         },
       },
-      required: ["titulo", "formato", "slides"],
+      required: ["conteudo_id"],
+    },
+  },
+  {
+    name: "salvar_nota",
+    description: "Salva a nota (0 a 100) e sugestões de melhoria do texto de um conteúdo, lendo-o como um editor exigente.",
+    inputSchema: {
+      type: "object",
+      properties: { conteudo_id: { type: "string" }, nota: { type: "number" }, resumo: { type: "string" }, melhorias: { type: "array", items: { type: "string" } } },
+      required: ["conteudo_id", "nota", "resumo"],
     },
   },
   {
@@ -158,17 +248,8 @@ export async function callTool(ws: string, name: string, args: Json) {
     const fmt = FORMATS.find((f) => f.id === str(args.formato)) ?? FORMATS[3];
     const raw = Array.isArray(args.slides) ? (args.slides as Json[]) : [];
     if (!raw.length) return { ...text("Envie pelo menos um slide."), isError: true };
-    const slides: Slide[] = raw.slice(0, fmt.multi ? 20 : 1).map((s) => ({
-      id: uid(),
-      title: str(s.titulo).slice(0, 200),
-      body: str(s.texto).slice(0, 800),
-      bg: color(s.fundo, "#111827"),
-      fg: color(s.cor_texto, "#f9fafb"),
-      accent: color(s.destaque, "#a78bfa"),
-      align: s.alinhamento === "center" ? "center" : "left",
-      titleSize: 84,
-      bodySize: 44,
-    }));
+    const style = args.estilo_id ? await getStyle(ws, str(args.estilo_id)) : null;
+    const slides: Slide[] = raw.slice(0, fmt.multi ? 20 : 1).map((s) => applySlide(baseSlide(style), s));
     const p: Project = {
       id: uid(),
       title: str(args.titulo, "Novo conteúdo").slice(0, 120),
@@ -178,9 +259,50 @@ export async function callTool(ws: string, name: string, args: Json) {
       slides,
       referenceIds: Array.isArray(args.referencias) ? args.referencias.filter((x): x is string => typeof x === "string") : [],
       updatedAt: Date.now(),
+      caption: str(args.legenda).slice(0, 3000),
+      styleId: style ? style.id : undefined,
+      mode: args.modo === "continuo" ? "continuo" : "normal",
+      stage: "texto",
     };
     await upsertRows("criador_contents", ws, [p], { source: "claude" });
-    return text(`Conteúdo “${p.title}” criado (${slides.length} slide(s)). Ele aparece na aba Criar do Criador.`);
+    return text(`Conteúdo “${p.title}” criado (id ${p.id}, ${slides.length} slide(s)). Ele aparece na aba Criar do Criador.`);
+  }
+  if (name === "ler_conteudo") {
+    const p = (await listRows<Project>("criador_contents", ws)).find((x) => x.id === str(args.conteudo_id));
+    if (!p) return { ...text("Conteúdo não encontrado."), isError: true };
+    return text(JSON.stringify(p, null, 2));
+  }
+  if (name === "atualizar_conteudo") {
+    const p = (await listRows<Project>("criador_contents", ws)).find((x) => x.id === str(args.conteudo_id));
+    if (!p) return { ...text("Conteúdo não encontrado."), isError: true };
+    if (typeof args.titulo === "string") p.title = args.titulo.slice(0, 120);
+    if (typeof args.legenda === "string") p.caption = args.legenda.slice(0, 3000);
+    if (args.modo === "continuo" || args.modo === "normal") p.mode = args.modo;
+    if (args.etapa === "texto" || args.etapa === "visual") p.stage = args.etapa;
+    const style = args.estilo_id ? await getStyle(ws, str(args.estilo_id)) : null;
+    if (style) p.styleId = style.id;
+    const fmt = FORMATS.find((f) => f.id === p.format) ?? FORMATS[3];
+    for (const u of Array.isArray(args.slides) ? (args.slides as Json[]) : []) {
+      const i = Math.floor(Number(u.indice));
+      if (!Number.isFinite(i) || i < 0 || i > p.slides.length || i >= (fmt.multi ? 20 : 1)) continue;
+      p.slides[i] = applySlide(p.slides[i] ?? baseSlide(style), u, p.slides[i] !== undefined);
+    }
+    p.updatedAt = Date.now();
+    await upsertRows("criador_contents", ws, [p], { source: "claude" });
+    return text(`Conteúdo “${p.title}” atualizado (${p.slides.length} slide(s)).`);
+  }
+  if (name === "salvar_nota") {
+    const p = (await listRows<Project>("criador_contents", ws)).find((x) => x.id === str(args.conteudo_id));
+    if (!p) return { ...text("Conteúdo não encontrado."), isError: true };
+    p.note = {
+      score: Math.max(0, Math.min(100, Math.round(Number(args.nota) || 0))),
+      summary: str(args.resumo).slice(0, 1500),
+      tips: Array.isArray(args.melhorias) ? args.melhorias.filter((t): t is string => typeof t === "string").slice(0, 10).map((t) => t.slice(0, 400)) : [],
+      at: Date.now(),
+    };
+    p.updatedAt = Date.now();
+    await upsertRows("criador_contents", ws, [p], { source: "claude" });
+    return text(`Nota ${p.note.score}/100 salva em “${p.title}”.`);
   }
   if (name === "listar_estilos") {
     const st = await listStyles(ws);

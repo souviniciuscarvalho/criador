@@ -7,6 +7,8 @@ const empty: AppState = {
   projects: [],
   references: [],
   styles: [],
+  deletedProjects: [],
+  defaultStyleId: "",
   claude: { token: "", createdAt: 0 },
   connections: {
     keys: {},
