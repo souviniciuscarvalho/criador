@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { dbConfigured, touch, validToken, workspaceOf } from "@/lib/server/db";
 import { callTool, TOOLS } from "@/lib/server/mcp";
+import { prepare } from "@/lib/server/imagegen";
 
 // Servidor MCP (Streamable HTTP, sem sessão): o Claude chama este endereço.
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 type Rpc = { jsonrpc: "2.0"; id?: string | number | null; method: string; params?: Record<string, unknown> };
 
@@ -26,7 +28,18 @@ async function handle(ws: string, m: Rpc) {
     case "tools/call": {
       try {
         await touch(ws);
-        return ok(await callTool(ws, String(m.params?.name), (m.params?.arguments as Record<string, unknown>) ?? {}));
+        const name = String(m.params?.name);
+        const args = (m.params?.arguments as Record<string, unknown>) ?? {};
+        const res = await callTool(ws, name, args);
+        // visual pronto: gera as imagens das lâminas com a IA de imagem conectada
+        if (name === "atualizar_conteudo" && args.etapa === "visual" && typeof args.conteudo_id === "string" && !(res as { isError?: boolean }).isError) {
+          const r = await prepare(ws, args.conteudo_id).catch(() => null);
+          if (r?.ok) {
+            after(r.run);
+            (res as { content: { type: string; text?: string }[] }).content.push({ type: "text", text: "As imagens das lâminas estão sendo geradas pela IA de imagem conectada; aparecem no painel em instantes." });
+          }
+        }
+        return ok(res);
       } catch (e) {
         return ok({ content: [{ type: "text", text: `Erro: ${(e as Error).message}` }], isError: true });
       }

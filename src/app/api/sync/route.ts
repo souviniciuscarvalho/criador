@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dbConfigured, deleteContents, deleteMissing, listRows, listStyles, upsertRows, validToken, wasUsed, workspaceOf } from "@/lib/server/db";
+import { dbConfigured, deleteContents, deleteMissing, imgIds, kvList, listRows, listStyles, upsertRows, validToken, wasUsed, workspaceOf } from "@/lib/server/db";
 import type { Project, Reference } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,13 @@ export async function POST(req: Request) {
     const newer = sendProjects.filter((p) => !current.has(p.id) || (p.updatedAt ?? 0) > (current.get(p.id)!.updatedAt ?? 0));
     await upsertRows("criador_contents", ws, newer, { source: "app" });
     const [contents, used, styles] = await Promise.all([listRows<Project>("criador_contents", ws), wasUsed(ws), listStyles(ws)]);
-    return NextResponse.json({ configured: true, used, studies: merged.filter((r) => r.study?.source === "claude").map((r) => ({ id: r.id, study: r.study })), contents, styles });
+    const [kv, ids] = await Promise.all([kvList(ws, "key:").then(async (k) => [k, await kvList(ws, "status:")] as const), imgIds(ws)]);
+    const imagens = {
+      keys: { openai: kv[0].some((x) => x.k === "key:openai"), gemini: kv[0].some((x) => x.k === "key:gemini") },
+      status: Object.fromEntries(kv[1].map((x) => [x.k.slice(7), JSON.parse(x.v)])),
+      ready: ids.map((x) => [x.content_id, x.slide_id]),
+    };
+    return NextResponse.json({ configured: true, imagens, used, studies: merged.filter((r) => r.study?.source === "claude").map((r) => ({ id: r.id, study: r.study })), contents, styles });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

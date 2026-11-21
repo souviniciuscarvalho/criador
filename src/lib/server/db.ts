@@ -103,4 +103,48 @@ export async function deleteContents(ws: string, ids: string[]) {
   const list = ids.filter((i) => /^[a-z0-9]{4,40}$/.test(i));
   if (!list.length) return;
   await rest(`criador_contents?workspace=eq.${q(ws)}&id=in.(${list.map((i) => `"${i}"`).join(",")})`, { method: "DELETE", prefer: "return=minimal" });
+  await rest(`criador_images?workspace=eq.${q(ws)}&content_id=in.(${list.map((i) => `"${i}"`).join(",")})`, { method: "DELETE", prefer: "return=minimal" });
+}
+
+// ---------- Chaves/estado (kv) e imagens geradas ----------
+export async function kvGet(ws: string, k: string): Promise<string | null> {
+  const r = await rest(`criador_kv?workspace=eq.${q(ws)}&k=eq.${q(k)}&select=v&limit=1`);
+  return r?.[0]?.v ?? null;
+}
+
+export async function kvList(ws: string, prefix: string): Promise<{ k: string; v: string }[]> {
+  return (await rest(`criador_kv?workspace=eq.${q(ws)}&k=like.${q(prefix + "*")}&select=k,v&limit=200`)) ?? [];
+}
+
+export async function kvSet(ws: string, k: string, v: string) {
+  await rest("criador_kv?on_conflict=workspace,k", {
+    method: "POST",
+    prefer: "resolution=merge-duplicates,return=minimal",
+    body: JSON.stringify([{ workspace: ws, k, v, updated_at: new Date().toISOString() }]),
+  });
+}
+
+export async function kvDelete(ws: string, k: string) {
+  await rest(`criador_kv?workspace=eq.${q(ws)}&k=eq.${q(k)}`, { method: "DELETE", prefer: "return=minimal" });
+}
+
+export async function imgPut(ws: string, contentId: string, slideId: string, data: string) {
+  await rest("criador_images?on_conflict=workspace,content_id,slide_id", {
+    method: "POST",
+    prefer: "resolution=merge-duplicates,return=minimal",
+    body: JSON.stringify([{ workspace: ws, content_id: contentId, slide_id: slideId, data }]),
+  });
+}
+
+export async function imgGet(ws: string, contentId: string, slideId: string): Promise<string | null> {
+  const r = await rest(`criador_images?workspace=eq.${q(ws)}&content_id=eq.${q(contentId)}&slide_id=eq.${q(slideId)}&select=data&limit=1`);
+  return r?.[0]?.data ?? null;
+}
+
+export async function imgIds(ws: string): Promise<{ content_id: string; slide_id: string }[]> {
+  return (await rest(`criador_images?workspace=eq.${q(ws)}&select=content_id,slide_id&limit=2000`)) ?? [];
+}
+
+export async function imgDelete(ws: string, contentId: string, slideId?: string) {
+  await rest(`criador_images?workspace=eq.${q(ws)}&content_id=eq.${q(contentId)}${slideId ? `&slide_id=eq.${q(slideId)}` : ""}`, { method: "DELETE", prefer: "return=minimal" });
 }

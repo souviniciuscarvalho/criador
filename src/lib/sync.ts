@@ -1,10 +1,13 @@
 "use client";
 import { useEffect } from "react";
 import { getState, setState, useApp } from "./store";
-import { pushStyle } from "./styles";
+import { fitImage, pushStyle } from "./styles";
 import type { Project, Reference, Style } from "./types";
 
 const uploading = new Set<string>();
+const fetching = new Set<string>();
+let pushedKeys = "";
+const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
 
 // Enquanto houver link do Claude, envia as referências ao servidor e traz de volta
 // estudos feitos pelo Claude e conteúdos criados por ele.
@@ -12,6 +15,18 @@ export function useSync() {
   const { state, ready } = useApp();
   const token = state.claude.token;
   const refKey = JSON.stringify(state.references.map((r) => [r.id, r.study?.source, r.name]));
+
+  const c = state.connections;
+  const keySig = JSON.stringify([c.keys.openai ?? "", c.keys.gemini ?? "", c.imageDefault, c.geminiModel, c.openaiModel, c.openaiQuality]);
+  useEffect(() => {
+    if (!ready || !token || pushedKeys === token + keySig) return;
+    const cc = getState().connections;
+    fetch("/api/keys", {
+      method: "POST",
+      headers: { ...auth(token), "Content-Type": "application/json" },
+      body: JSON.stringify({ keys: { openai: cc.keys.openai ?? "", gemini: cc.keys.gemini ?? "" }, cfg: { imageDefault: cc.imageDefault, geminiModel: cc.geminiModel, openaiModel: cc.openaiModel, openaiQuality: cc.openaiQuality } }),
+    }).then((r) => { if (r.ok) pushedKeys = token + keySig; }).catch(() => {});
+  }, [ready, token, keySig]);
 
   useEffect(() => {
     if (!ready || !token) return;
@@ -38,6 +53,28 @@ export function useSync() {
             uploading.add(st.id);
             pushStyle(st.id, { name: true, guide: true, prints: true }).catch(() => {}).finally(() => uploading.delete(st.id));
           }
+        }
+        // imagens geradas no servidor: baixa as que faltam neste navegador
+        const im = j.imagens as { keys: { openai: boolean; gemini: boolean }; status: NonNullable<ReturnType<typeof getState>["imagens"]>["status"]; ready: [string, string][] } | undefined;
+        if (im) {
+          for (const [cid, sid] of im.ready) {
+            const p = getState().projects.find((x) => x.id === cid);
+            const sl = p?.slides.find((x) => x.id === sid);
+            if (!sl || sl.bgImage || fetching.has(sid)) continue;
+            fetching.add(sid);
+            fetch(`/api/slide-image?c=${cid}&s=${sid}`, { headers: auth(token) })
+              .then((r) => r.json())
+              .then(async (d) => {
+                if (!d.image) return;
+                const img = await fitImage(d.image);
+                setState((s) => ({ ...s, projects: s.projects.map((pp) => (pp.id !== cid ? pp : { ...pp, slides: pp.slides.map((x) => (x.id === sid && !x.bgImage ? { ...x, bgImage: img, bgDim: x.bgDim ?? 0.45 } : x)) })) }));
+              })
+              .catch(() => {})
+              .finally(() => fetching.delete(sid));
+          }
+          const prev = JSON.stringify(getState().imagens ?? null);
+          const next = { keys: im.keys, status: im.status };
+          if (prev !== JSON.stringify(next)) setState((s) => ({ ...s, imagens: next }));
         }
         setState((s) => {
           const studies = new Map<string, Reference["study"]>((j.studies ?? []).map((x: { id: string; study: Reference["study"] }) => [x.id, x.study]));

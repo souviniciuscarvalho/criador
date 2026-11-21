@@ -69,6 +69,15 @@ export default function CriarPage() {
     try { patchSlide(si, { bgImage: await fitImage(f), bgDim: slide?.bgDim ?? 0.45 }); } catch { setGen((g) => ({ ...g, err: "Não consegui abrir essa imagem." })); }
   }
   const [fig, setFig] = useState("");
+  async function genServer() {
+    const t = state.claude.token;
+    if (!t) { setGen((g) => ({ ...g, err: "Ligue o Claude em Conexões primeiro." })); return; }
+    setGen((g) => ({ ...g, err: "" }));
+    const r = await fetch("/api/gerar", { method: "POST", headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" }, body: JSON.stringify({ contentId: proj?.id }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) setGen((g) => ({ ...g, err: j.error ?? "falha ao pedir as imagens" }));
+  }
+  const imgSt = proj ? state.imagens?.status[proj.id] : undefined;
   async function importFigma() {
     if (!conn.keys.figma) { setGen((g) => ({ ...g, err: "Salve o token do Figma em Conexões → Integrações." })); return; }
     setGen((g) => ({ ...g, busy: true, err: "" }));
@@ -136,7 +145,7 @@ export default function CriarPage() {
   const refNames = chosen.map((r) => `“${r.name}”`).join(", ");
 
   const notePrompt = `Leia o texto do conteúdo “${proj.title}” (id ${proj.id}) no Criador, pelo conector, como um editor exigente (ler_conteudo). Dê uma nota de 0 a 100, um resumo e sugestões de melhoria, e salve com salvar_nota. Depois me diga em poucas linhas o que melhorar.`;
-  const visualPrompt = `Monte o visual do conteúdo “${proj.title}” (id ${proj.id}) no Criador, pelo conector.\n1. Chame ler_conteudo${style ? ` e ler_estilo com estilo_id: ${style.id} (“${style.name}”)` : ""}.\n2. Atualize cada slide com atualizar_conteudo (indice, fundo, cor_texto, destaque, alinhamento, tamanho_titulo, tamanho_texto${style ? ", pecas com os componentes do estilo" : ""}), sem mudar o texto já aprovado${style ? ", seguindo o guia do estilo" : ""}.\n3. Formato do carrossel: ${proj.mode === "continuo" ? "contínuo (os slides se encaixam como uma faixa só)" : "normal (cada slide fechado em si)"}.\n4. No fim, use etapa: "visual".`;
+  const visualPrompt = `Monte o visual do conteúdo “${proj.title}” (id ${proj.id}) no Criador, pelo conector.\n1. Chame ler_conteudo${style ? ` e ler_estilo com estilo_id: ${style.id} (“${style.name}”)` : ""}.\n2. Atualize cada slide com atualizar_conteudo (indice, fundo, cor_texto, destaque, alinhamento, tamanho_titulo, tamanho_texto${style ? ", pecas com os componentes do estilo" : ""}), sem mudar o texto já aprovado${style ? ", seguindo o guia do estilo" : ""}.\n3. Formato do carrossel: ${proj.mode === "continuo" ? "contínuo (os slides se encaixam como uma faixa só)" : "normal (cada slide fechado em si)"}.\n4. Escreva ideia_imagem para TODOS os slides (uma cena concreta, sem texto escrito na imagem): a IA de imagem conectada gera uma imagem por slide sozinha quando você terminar.\n5. No fim, use etapa: "visual".`;
   const textPrompt = `Escreva o texto de um ${fmt.label.toLowerCase()} para o Criador, pelo conector${refNames ? `, usando como base as referências ${refNames} (ler_referencia)` : ""}. Tema: ${proj.title}. Salve com criar_conteudo (título, legenda e slides com texto principal, texto de apoio e ideia de imagem).`;
 
   return (
@@ -269,7 +278,7 @@ export default function CriarPage() {
                     <label className="btn btn-ghost cursor-pointer"><ImagePlus size={15} /> Enviar foto
                       <input type="file" accept="image/*" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ""; }} />
                     </label>
-                    {slide.bgImage && <button className="btn btn-ghost" onClick={() => patchSlide(si, { bgImage: undefined })}><X size={14} /> Tirar</button>}
+                    {slide.bgImage && <button className="btn btn-ghost" onClick={() => { patchSlide(si, { bgImage: undefined }); const t = state.claude.token; if (t) fetch(`/api/slide-image?c=${proj.id}&s=${slide.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${t}` } }).catch(() => {}); }}><X size={14} /> Tirar</button>}
                   </div>
                   <div className="flex gap-2">
                     <input className="input" placeholder="Link de um quadro do Figma" value={fig} onChange={(e) => setFig(e.target.value)} />
@@ -301,6 +310,17 @@ export default function CriarPage() {
                   ))}
                 </div>
               </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line p-3 text-sm">
+              <button className="btn btn-ghost" disabled={imgSt?.state === "gerando"} onClick={genServer}>
+                {imgSt?.state === "gerando" ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Gerar imagens de todos os slides
+              </button>
+              <span className="text-muted">
+                {imgSt?.state === "gerando" ? `Gerando ${imgSt.done}/${imgSt.total}… pode fechar, continua no servidor.`
+                  : imgSt?.state === "pronto" ? "Imagens prontas." : imgSt?.state === "erro" ? `Algumas falharam: ${imgSt.error}`
+                  : state.imagens && !state.imagens.keys.openai && !state.imagens.keys.gemini ? "Salve a chave de imagem em Conexões → Imagens." : "Quando o Claude terminar o visual, as imagens saem sozinhas."}
+              </span>
             </div>
 
             <div>
