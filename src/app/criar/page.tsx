@@ -1,11 +1,12 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Copy, Download, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, Copy, Download, ImagePlus, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { useApp, setState } from "@/lib/store";
 import { FORMATS, newProject, newSlide, uid, type Project, type Slide, type Style } from "@/lib/types";
 import SlidePreview from "@/components/SlidePreview";
 import { downloadSlides } from "@/lib/render";
+import { fitImage } from "@/lib/styles";
 
 const PALETTES = [
   { bg: "#111827", fg: "#f9fafb", accent: "#a78bfa" },
@@ -58,6 +59,36 @@ export default function CriarPage() {
   }
   const patchSlide = (i: number, patch: Partial<Slide>) =>
     update((p) => ({ ...p, slides: p.slides.map((s, k) => (k === i ? { ...s, ...patch } : s)) }));
+
+  const [gen, setGen] = useState<{ busy: boolean; err: string; prompt: string; idea: string }>({ busy: false, err: "", prompt: "", idea: "" });
+  const conn = state.connections;
+  const provider = conn.imageDefault === "gemini" || conn.imageDefault === "openai" ? conn.imageDefault : conn.keys.gemini ? "gemini" : conn.keys.openai ? "openai" : "";
+
+  async function upload(f?: File) {
+    if (!f) return;
+    try { patchSlide(si, { bgImage: await fitImage(f), bgDim: slide?.bgDim ?? 0.45 }); } catch { setGen((g) => ({ ...g, err: "Não consegui abrir essa imagem." })); }
+  }
+  async function generate() {
+    const base = slide?.imageIdea?.trim() || slide?.title || "";
+    const prompt = (gen.idea === slide?.id && gen.prompt ? gen.prompt : base).trim();
+    if (!provider) { setGen((g) => ({ ...g, err: "Salve a chave da OpenAI ou do Gemini em Conexões → Imagens." })); return; }
+    setGen((g) => ({ ...g, busy: true, err: "" }));
+    try {
+      const r = await fetch("/api/imagem", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider, key: conn.keys[provider], prompt: `${prompt}. Imagem de fundo para post de rede social, sem texto escrito, sem letras.`,
+          model: provider === "gemini" ? conn.geminiModel : conn.openaiModel, quality: conn.openaiQuality, width: proj?.width, height: proj?.height,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "falha ao gerar");
+      patchSlide(si, { bgImage: await fitImage(j.image), bgDim: slide.bgDim ?? 0.45 });
+      setGen((g) => ({ ...g, busy: false }));
+    } catch (e) {
+      setGen((g) => ({ ...g, busy: false, err: e instanceof Error ? e.message : "falha ao gerar" }));
+    }
+  }
 
   if (!ready) return null;
 
@@ -211,6 +242,26 @@ export default function CriarPage() {
                   {PALETTES.map((p, i) => <button key={i} aria-label={`Paleta ${i + 1}`} onClick={() => patchSlide(si, p)} className="size-7 rounded-full border border-line" style={{ background: `linear-gradient(135deg, ${p.bg} 50%, ${p.accent} 50%)` }} />)}
                   {style?.palette.map((c) => <button key={c} aria-label={`Cor ${c}`} title={c} onClick={() => patchSlide(si, { bg: c })} className="size-7 rounded-full border border-white/40" style={{ background: c }} />)}
                   <button className="chip" onClick={() => patchSlide(si, { align: slide.align === "left" ? "center" : "left" })}>Alinhar: {slide.align === "left" ? "esquerda" : "centro"}</button>
+                </div>
+                <div className="space-y-2">
+                  <span className="label">Foto de fundo</span>
+                  <textarea className="input min-h-16" placeholder={slide.imageIdea || "Descreva a imagem (ou deixe a ideia de imagem do slide)"}
+                    value={gen.idea === slide.id ? gen.prompt : ""} onChange={(e) => setGen((g) => ({ ...g, idea: slide.id, prompt: e.target.value }))} />
+                  <div className="flex flex-wrap gap-2">
+                    <button className="btn" disabled={gen.busy} onClick={generate}>
+                      {gen.busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Gerar com IA{provider ? ` (${provider === "gemini" ? "Gemini" : "OpenAI"})` : ""}
+                    </button>
+                    <label className="btn btn-ghost cursor-pointer"><ImagePlus size={15} /> Enviar foto
+                      <input type="file" accept="image/*" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ""; }} />
+                    </label>
+                    {slide.bgImage && <button className="btn btn-ghost" onClick={() => patchSlide(si, { bgImage: undefined })}><X size={14} /> Tirar</button>}
+                  </div>
+                  {slide.bgImage && (
+                    <div><span className="label">Escurecer a foto ({Math.round((slide.bgDim ?? 0.45) * 100)}%)</span>
+                      <input type="range" min={0} max={85} className="w-full" value={Math.round((slide.bgDim ?? 0.45) * 100)} onChange={(e) => patchSlide(si, { bgDim: +e.target.value / 100 })} /></div>
+                  )}
+                  {gen.err && <p className="text-xs text-red-400">{gen.err}</p>}
+                  {!provider && <p className="text-xs text-muted">Para gerar com IA, salve a chave em <Link className="underline" href="/conexoes/imagens">Conexões → Imagens</Link>. Enviar foto funciona sem chave. As fotos ficam só neste navegador.</p>}
                 </div>
                 <div>
                   <span className="label">Componentes do estilo</span>

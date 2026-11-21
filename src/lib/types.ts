@@ -30,6 +30,8 @@ export interface Slide {
   imageIdea?: string; // ideia de imagem (opcional)
   font?: string; // fonte do estilo (se instalada no aparelho)
   pieces?: Piece[]; // componentes do estilo aplicados
+  bgImage?: string; // foto de fundo (data URL, fica só neste navegador)
+  bgDim?: number; // escurecimento da foto, 0 a 0.85
 }
 
 export interface Piece {

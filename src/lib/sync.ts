@@ -22,7 +22,7 @@ export function useSync() {
         const res = await fetch("/api/sync", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ references: getState().references, projects: getState().projects, deleted: sentDeleted }),
+          body: JSON.stringify({ references: getState().references, projects: getState().projects.map((p) => ({ ...p, slides: p.slides.map((x) => ({ ...x, bgImage: undefined })) })), deleted: sentDeleted }),
         });
         const j = await res.json().catch(() => ({}));
         if (stop) return;
@@ -54,7 +54,12 @@ export function useSync() {
           const replaced = new Map(server.filter((p) => local.has(p.id) && (p.updatedAt ?? 0) > local.get(p.id)!.updatedAt).map((p) => [p.id, p]));
           if (incoming.length || replaced.size) changed = true;
           if (sentDeleted.length) changed = true;
-          const projects = [...incoming, ...s.projects.map((p) => replaced.get(p.id) ?? p)];
+          const keepImg = (p: Project): Project => {
+            const old = local.get(p.id);
+            const bg = new Map((old?.slides ?? []).filter((x) => x.bgImage).map((x) => [x.id, x.bgImage]));
+            return { ...p, slides: p.slides.map((x) => (bg.has(x.id) ? { ...x, bgImage: bg.get(x.id) } : x)) };
+          };
+          const projects = [...incoming, ...s.projects.map((p) => (replaced.has(p.id) ? keepImg(replaced.get(p.id)!) : p))];
           const styles = s.styles.map((st) => {
             const r = remote.get(st.id) as Partial<Style> | undefined;
             if (r && typeof r.rev === "number" && r.rev > st.rev && r.status) {
