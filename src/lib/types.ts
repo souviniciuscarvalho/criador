@@ -61,6 +61,8 @@ export interface Reference {
 export interface ClaudeConnection {
   token: string; // segredo do link MCP (vazio = sem link)
   createdAt: number;
+  used?: boolean; // o Claude já chamou o link
+  syncError?: string;
 }
 
 export type KeyProvider = "iagen" | "openai" | "gemini" | "figma" | "redditId" | "redditSecret" | "producthunt";

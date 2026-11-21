@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSync } from "@/lib/sync";
 import { BookMarked, PenSquare, Plug } from "lucide-react";
 
 const sections = [
@@ -16,6 +17,7 @@ const sections = [
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  useSync();
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <aside className="border-b border-line bg-bg md:w-56 md:border-r md:border-b-0">

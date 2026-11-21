@@ -30,7 +30,7 @@ function load() {
       state = {
         ...empty,
         ...d,
-        claude: { ...empty.claude, token: d.claude?.token ?? "", createdAt: d.claude?.createdAt ?? 0 },
+        claude: { ...empty.claude, token: d.claude?.token ?? "", createdAt: d.claude?.createdAt ?? 0, used: d.claude?.used },
         connections: { ...empty.connections, ...d.connections },
       };
     }
@@ -48,6 +48,11 @@ export function setState(fn: (s: AppState) => AppState) {
     alert("Armazenamento do navegador cheio. Remova imagens de referências antigas.");
   }
   listeners.forEach((l) => l());
+}
+
+export function getState(): AppState {
+  load();
+  return state;
 }
 
 function subscribe(l: () => void) {

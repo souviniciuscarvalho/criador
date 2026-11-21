@@ -18,7 +18,7 @@ export default function ClaudePage() {
   const url = token ? `${origin}/api/mcp/${token}` : "";
   const masked = token ? `${origin}/api/mcp/••••••••` : "";
   const when = createdAt ? new Date(createdAt).toLocaleString("pt-BR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
-  const gen = () => setState((s) => ({ ...s, claude: { token: genToken(), createdAt: Date.now() } }));
+  const gen = () => setState((s) => ({ ...s, claude: { token: genToken(), createdAt: Date.now(), used: false } }));
 
   return (
     <>
@@ -30,7 +30,7 @@ export default function ClaudePage() {
       <Card
         title="Conversando no Claude"
         desc="Você pede no claude.ai (ou no app do Claude) e o conteúdo aparece aqui. Usa o seu plano do Claude, sem chave e sem custo extra."
-        status={<Status ok={!!token}>{token ? "link gerado" : "falta gerar o link"}</Status>}
+        status={<Status ok={!!state.claude.used}>{!token ? "falta gerar o link" : state.claude.syncError ? "servidor sem banco" : state.claude.used ? "conectado" : "falta adicionar no Claude"}</Status>}
       />
 
       <Card title="Passo a passo">
@@ -68,9 +68,11 @@ export default function ClaudePage() {
         ]} />
       </Card>
 
-      <div className="rounded-xl border border-dashed border-line p-4 text-sm text-muted">
-        <b className="text-fg">Atenção:</b> a geração do link já funciona, mas o servidor que o Claude chama (endpoint MCP) ainda não existe. Ele precisa de um banco para guardar o que o Claude cria — é o próximo passo.
-      </div>
+      {state.claude.syncError && (
+        <div className="rounded-xl border border-dashed border-line p-4 text-sm text-muted">
+          <b className="text-fg">Servidor sem banco:</b> {state.claude.syncError}
+        </div>
+      )}
 
       <Card title="Para gastar menos do seu limite do Claude">
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
