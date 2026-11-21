@@ -1,0 +1,102 @@
+export type FormatKind = "feed" | "story" | "carrossel" | "quadrado" | "custom";
+
+export interface ContentFormat {
+  id: FormatKind;
+  label: string;
+  hint: string;
+  width: number;
+  height: number;
+  multi: boolean; // vários slides
+}
+
+export const FORMATS: ContentFormat[] = [
+  { id: "feed", label: "Feed", hint: "Post 4:5 · 1080×1350", width: 1080, height: 1350, multi: false },
+  { id: "quadrado", label: "Quadrado", hint: "Post 1:1 · 1080×1080", width: 1080, height: 1080, multi: false },
+  { id: "story", label: "Story", hint: "Vertical 9:16 · 1080×1920", width: 1080, height: 1920, multi: false },
+  { id: "carrossel", label: "Carrossel", hint: "Vários slides 4:5", width: 1080, height: 1350, multi: true },
+  { id: "custom", label: "Personalizado", hint: "Defina o tamanho", width: 1080, height: 1350, multi: true },
+];
+
+export interface Slide {
+  id: string;
+  title: string;
+  body: string;
+  bg: string;
+  fg: string;
+  accent: string;
+  align: "left" | "center";
+  titleSize: number; // px no canvas real (1080 de largura)
+  bodySize: number;
+}
+
+export interface Project {
+  id: string;
+  title: string;
+  format: FormatKind;
+  width: number;
+  height: number;
+  slides: Slide[];
+  referenceIds: string[];
+  updatedAt: number;
+}
+
+export interface Study {
+  summary: string;
+  tags: string[];
+  source: "local" | "claude";
+  at: number;
+}
+
+export interface Reference {
+  id: string;
+  name: string;
+  niche: string;
+  kind: "feed" | "carrossel" | "story" | "outro";
+  notes: string; // texto/legenda/transcrição do conteúdo
+  images: string[]; // data URLs reduzidas
+  study: Study | null;
+  createdAt: number;
+}
+
+export interface ClaudeConnection {
+  endpoint: string;
+  token: string;
+  enabled: boolean;
+}
+
+export interface AppState {
+  projects: Project[];
+  references: Reference[];
+  claude: ClaudeConnection;
+}
+
+export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+
+export function newSlide(partial: Partial<Slide> = {}): Slide {
+  return {
+    id: uid(),
+    title: "Título do slide",
+    body: "Escreva aqui o texto de apoio.",
+    bg: "#111827",
+    fg: "#f9fafb",
+    accent: "#a78bfa",
+    align: "left",
+    titleSize: 84,
+    bodySize: 44,
+    ...partial,
+  };
+}
+
+export function newProject(format: FormatKind = "carrossel"): Project {
+  const f = FORMATS.find((x) => x.id === format)!;
+  return {
+    id: uid(),
+    title: "Novo conteúdo",
+    format,
+    width: f.width,
+    height: f.height,
+    slides: [newSlide()],
+    referenceIds: [],
+    updatedAt: Date.now(),
+  };
+}
