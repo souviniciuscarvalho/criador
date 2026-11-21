@@ -1,4 +1,4 @@
-import { makeImage, viaService } from "@/lib/server/imagegen";
+import { credential, makeImage, viaService } from "@/lib/server/imagegen";
 import { dbConfigured, validToken, workspaceOf } from "@/lib/server/db";
 
 // Gera uma imagem com a chave enviada pelo navegador (não é gravada).
@@ -7,7 +7,11 @@ export const maxDuration = 120;
 export async function POST(req: Request) {
   const b = (await req.json().catch(() => ({}))) as { provider?: string; key?: string; model?: string; quality?: string; prompt?: string; width?: number; height?: number };
   const prompt = (b.prompt ?? "").trim().slice(0, 3000);
-  const key = (b.key ?? "").trim();
+  let key = (b.key ?? "").trim();
+  if (!key && (b.provider === "openai" || b.provider === "gemini")) {
+    const t = (req.headers.get("authorization") ?? "").replace(/^Bearer /, "");
+    if (validToken(t) && dbConfigured()) key = (await credential(workspaceOf(t), b.provider).catch(() => null)) ?? "";
+  }
   if (b.provider === "iagen" || b.provider === "magnific") {
     const t = (req.headers.get("authorization") ?? "").replace(/^Bearer /, "");
     if (!validToken(t) || !dbConfigured()) return Response.json({ error: "Ligue o Claude primeiro." }, { status: 401 });

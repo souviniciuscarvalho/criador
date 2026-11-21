@@ -51,7 +51,7 @@ export default function ImagensPage() {
 
       <h3 className="text-xs font-medium tracking-widest text-muted uppercase">Com a sua conta (o mais fácil)</h3>
       <Card title="IA Gen" desc="Usa os créditos da sua conta do IA Gen. Você só cola a sua chave uma vez."
-        status={<div className="flex items-center gap-3">{badge("iagen", !!k.iagen)}<Status ok={!!k.iagen} /></div>}>
+        status={<div className="flex items-center gap-3">{badge("iagen", !!k.iagen || !!im?.keys.iagen)}<Status ok={!!k.iagen || !!im?.keys.iagen} /></div>}>
         <Steps items={[
           <>Abra o IA Gen na página Conectar agente. {ext("https://app.iamaisgen.com", "Abrir o IA Gen")}</>,
           <>Role até o fim e abra “Para programadores: Claude Code no terminal ou plugin do Figma”.</>,
@@ -85,7 +85,7 @@ export default function ImagensPage() {
 
       <h3 className="pt-2 text-xs font-medium tracking-widest text-muted uppercase">Com chave de API (para quem já tem conta de desenvolvedor)</h3>
       <Card title="OpenAI" desc="A IA de imagem do ChatGPT, pela chave de API. A OpenAI cobra o uso direto de você."
-        status={<div className="flex items-center gap-3">{badge("openai", !!k.openai)}<Status ok={!!k.openai} /></div>}>
+        status={<div className="flex items-center gap-3">{badge("openai", !!k.openai || !!im?.keys.openai)}<Status ok={!!k.openai || !!im?.keys.openai} /></div>}>
         <Steps items={[
           <>Entre em {ext("https://platform.openai.com", "platform.openai.com")} e crie a conta.</>,
           <>Em Billing, coloque créditos. A API é cobrada à parte da assinatura do ChatGPT.</>,
@@ -96,7 +96,7 @@ export default function ImagensPage() {
       </Card>
 
       <Card title="Google Gemini" desc="A IA de imagem do Google, pela chave de API. Tem uso grátis com limite por dia."
-        status={<div className="flex items-center gap-3">{badge("gemini", !!k.gemini)}<Status ok={!!k.gemini} /></div>}>
+        status={<div className="flex items-center gap-3">{badge("gemini", !!k.gemini || !!im?.keys.gemini)}<Status ok={!!k.gemini || !!im?.keys.gemini} /></div>}>
         <Steps items={[
           <>Entre em {ext("https://aistudio.google.com", "aistudio.google.com")} com a sua conta Google.</>,
           <>Clique em Get API key e depois em Create API key. Começa com <code>AIza</code>.</>,

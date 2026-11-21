@@ -19,14 +19,14 @@ export function useSync() {
   const c = state.connections;
   const keySig = JSON.stringify([c.keys.openai ?? "", c.keys.gemini ?? "", c.keys.iagen ?? "", c.imageDefault, c.geminiModel, c.openaiModel, c.openaiQuality]);
   useEffect(() => {
-    if (!ready || !token || pushedKeys === token + keySig) return;
+    if (!ready || !token || !state.claude.hydrated || pushedKeys === token + keySig) return;
     const cc = getState().connections;
     fetch("/api/keys", {
       method: "POST",
       headers: { ...auth(token), "Content-Type": "application/json" },
-      body: JSON.stringify({ keys: { openai: cc.keys.openai ?? "", gemini: cc.keys.gemini ?? "", iagen: cc.keys.iagen ?? "" }, cfg: { imageDefault: cc.imageDefault, geminiModel: cc.geminiModel, openaiModel: cc.openaiModel, openaiQuality: cc.openaiQuality } }),
+      body: JSON.stringify({ keys: { ...(cc.keys.openai ? { openai: cc.keys.openai } : {}), ...(cc.keys.gemini ? { gemini: cc.keys.gemini } : {}), ...(cc.keys.iagen ? { iagen: cc.keys.iagen } : {}) }, cfg: { imageDefault: cc.imageDefault, geminiModel: cc.geminiModel, openaiModel: cc.openaiModel, openaiQuality: cc.openaiQuality } }),
     }).then((r) => { if (r.ok) pushedKeys = token + keySig; }).catch(() => {});
-  }, [ready, token, keySig]);
+  }, [ready, token, keySig, state.claude.hydrated]);
 
   useEffect(() => {
     if (!ready || !token) return;
@@ -37,7 +37,7 @@ export function useSync() {
         const res = await fetch("/api/sync", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ references: getState().references, projects: getState().projects.map((p) => ({ ...p, slides: p.slides.map((x) => ({ ...x, bgImage: undefined })) })), deleted: sentDeleted }),
+          body: JSON.stringify({ references: getState().references, projects: getState().projects.map((p) => ({ ...p, slides: p.slides.map((x) => ({ ...x, bgImage: undefined })) })), deleted: sentDeleted, hydrated: !!getState().claude.hydrated }),
         });
         const j = await res.json().catch(() => ({}));
         if (stop) return;
@@ -76,6 +76,40 @@ export function useSync() {
           const next = { keys: im.keys, status: im.status, tools: im.tools, errors: im.errors };
           if (prev !== JSON.stringify(next)) setState((s) => ({ ...s, imagens: next }));
         }
+        // outro navegador com o mesmo link: traz referências, estilos e configurações do servidor
+        const srvRefs = (j.references ?? []) as Reference[];
+        const srvCfg = j.cfg as { imageDefault?: string; geminiModel?: string; openaiModel?: string; openaiQuality?: string } | null;
+        const localStyleIds = new Set(getState().styles.map((x) => x.id));
+        const newStyles = ((j.styles ?? []) as Array<Record<string, unknown> & { id: string }>).filter((x) => !localStyleIds.has(x.id) && !uploading.has(x.id));
+        for (const ns of newStyles) {
+          uploading.add(ns.id);
+          fetch(`/api/styles?id=${ns.id}`, { headers: auth(token) })
+            .then((r) => r.json())
+            .then((d) => setState((s) => (s.styles.some((x) => x.id === ns.id) ? s : {
+              ...s,
+              styles: [...s.styles, {
+                id: ns.id, name: String(ns.name ?? "Estilo"), prints: (d.prints ?? []) as string[], status: (ns.status as Style["status"]) ?? "novo", guide: String(ns.guide ?? ""),
+                fonts: (ns.fonts as Style["fonts"]) ?? { title: "", body: "" }, palette: (ns.palette as string[]) ?? [], components: (ns.components as Style["components"]) ?? [],
+                recreated: (ns.recreated as Style["recreated"]) ?? [], rev: typeof ns.rev === "number" ? ns.rev : 0, createdAt: Date.now(),
+              }],
+            })))
+            .catch(() => {})
+            .finally(() => uploading.delete(ns.id));
+        }
+        setState((s) => {
+          const haveRefs = new Set(s.references.map((r) => r.id));
+          const addRefs = srvRefs.filter((r) => !haveRefs.has(r.id));
+          const adopt = srvCfg && !s.connections.imageDefault && srvCfg.imageDefault;
+          if (!s.claude.hydrated || addRefs.length || adopt) {
+            return {
+              ...s,
+              references: [...s.references, ...addRefs],
+              connections: adopt ? { ...s.connections, imageDefault: srvCfg!.imageDefault as typeof s.connections.imageDefault, geminiModel: srvCfg!.geminiModel || s.connections.geminiModel, openaiModel: srvCfg!.openaiModel || s.connections.openaiModel, openaiQuality: srvCfg!.openaiQuality || s.connections.openaiQuality } : s.connections,
+              claude: { ...s.claude, hydrated: true },
+            };
+          }
+          return s;
+        });
         setState((s) => {
           const studies = new Map<string, Reference["study"]>((j.studies ?? []).map((x: { id: string; study: Reference["study"] }) => [x.id, x.study]));
           let changed = s.claude.syncError !== undefined || s.claude.used !== !!j.used;

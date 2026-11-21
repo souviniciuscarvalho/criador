@@ -38,6 +38,11 @@ export function CopyButton({ text, label = "Copiar" }: { text: string; label?: s
 export function KeyField({ provider, placeholder, test }: { provider: KeyProvider; placeholder: string; test?: (v: string) => boolean }) {
   const { state } = useApp();
   const saved = state.connections.keys[provider];
+  const remote = (provider === "openai" || provider === "gemini" || provider === "iagen") && !!state.imagens?.keys?.[provider];
+  const removeRemote = () => {
+    const t = state.claude.token;
+    if (t) fetch("/api/keys", { method: "POST", headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" }, body: JSON.stringify({ keys: { [provider]: "" } }) }).then(() => setState((s) => s.imagens ? { ...s, imagens: { ...s.imagens, keys: { ...s.imagens.keys, [provider]: false } } } : s)).catch(() => {});
+  };
   const [val, setVal] = useState("");
   const [err, setErr] = useState("");
   const set = (v: string | undefined) =>
@@ -46,12 +51,19 @@ export function KeyField({ provider, placeholder, test }: { provider: KeyProvide
       if (v) keys[provider] = v; else delete keys[provider];
       return { ...s, connections: { ...s.connections, keys } };
     });
+  if (!saved && remote)
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-lg bg-panel2 px-3 py-2 text-xs text-muted">chave guardada no servidor</span>
+        <button className="btn btn-ghost ml-auto" onClick={removeRemote}>Remover</button>
+      </div>
+    );
   if (saved)
     return (
       <div className="flex flex-wrap items-center gap-2">
         <code className="rounded-lg bg-panel2 px-3 py-2 text-xs text-muted">{saved.slice(0, 6)}…{saved.slice(-4)}</code>
         <span className="text-xs text-muted">salva neste navegador</span>
-        <button className="btn btn-ghost ml-auto" onClick={() => set(undefined)}>Remover</button>
+        <button className="btn btn-ghost ml-auto" onClick={() => { set(undefined); removeRemote(); }}>Remover</button>
       </div>
     );
   return (

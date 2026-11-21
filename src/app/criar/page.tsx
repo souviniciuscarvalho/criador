@@ -63,7 +63,7 @@ export default function CriarPage() {
   const [gen, setGen] = useState<{ busy: boolean; err: string; prompt: string; idea: string }>({ busy: false, err: "", prompt: "", idea: "" });
   const conn = state.connections;
   const ik = state.imagens?.keys;
-  const can = (p: string) => (p === "magnific" ? !!ik?.magnific : p === "iagen" ? !!(ik?.iagen || conn.keys.iagen) : !!conn.keys[p as "openai" | "gemini"]);
+  const can = (p: string) => !!(ik?.[p as "openai" | "gemini" | "iagen" | "magnific"] || (p !== "magnific" && conn.keys[p as "openai" | "gemini" | "iagen"]));
   const provider = (["magnific", "iagen", "gemini", "openai"] as const).find((p) => p === conn.imageDefault && can(p)) ?? (["magnific", "iagen", "gemini", "openai"] as const).find(can) ?? "";
 
   async function upload(f?: File) {

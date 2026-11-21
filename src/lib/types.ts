@@ -110,6 +110,7 @@ export interface ClaudeConnection {
   token: string; // segredo do link MCP (vazio = sem link)
   createdAt: number;
   used?: boolean; // o Claude já chamou o link
+  hydrated?: boolean; // já trouxe do servidor o que existia neste link
   syncError?: string;
 }
 

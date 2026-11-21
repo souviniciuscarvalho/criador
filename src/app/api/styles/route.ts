@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dbConfigured, deleteStyle, getStyle, putStyle, replacePrints, validToken, workspaceOf } from "@/lib/server/db";
+import { dbConfigured, deleteStyle, getStyle, listPrints, putStyle, replacePrints, validToken, workspaceOf } from "@/lib/server/db";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +44,18 @@ export async function DELETE(req: Request) {
   try {
     await deleteStyle(ws, id);
     return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+}
+
+export async function GET(req: Request) {
+  const ws = auth(req);
+  const id = new URL(req.url).searchParams.get("id");
+  if (!ws || !okId(id)) return NextResponse.json({ error: "pedido inválido" }, { status: 400 });
+  if (!dbConfigured()) return NextResponse.json({ error: "Supabase não configurado" }, { status: 503 });
+  try {
+    return NextResponse.json({ prints: await listPrints(ws, id) });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

@@ -12,6 +12,8 @@ function genToken() {
 
 export default function ClaudePage() {
   const { state, ready } = useApp();
+  const [paste, setPaste] = useState("");
+  const [pasteErr, setPasteErr] = useState("");
   const [shown, setShown] = useState(false); // o link só aparece inteiro logo depois de gerar
   if (!ready) return null;
   const origin = window.location.origin;
@@ -68,6 +70,29 @@ export default function ClaudePage() {
             <p>“Cria um post de feed sobre [tema], usando as minhas referências de [nicho].”</p>
           </div>,
         ]} />
+      </Card>
+
+      <Card title="Usar em outro navegador" desc="Não tem login: o link é a sua chave. Com o mesmo link, qualquer navegador mostra as mesmas conexões, estilos, referências e conteúdos.">
+        {token ? (
+          <div className="space-y-2">
+            <p className="text-sm text-muted">Copie o link de acesso e abra no outro navegador. Ele entra já conectado.</p>
+            <CopyButton text={`${origin}/entrar#${token}`} label="Copiar link de acesso" />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-sm text-muted">Já conectou em outro navegador? Cole aqui o link de acesso (ou o link do Claude).</p>
+            <div className="flex gap-2">
+              <input className="input" placeholder="https://…/entrar#… ou …/api/mcp/…" value={paste} onChange={(e) => { setPaste(e.target.value); setPasteErr(""); }} />
+              <button className="btn" onClick={() => {
+                const t = paste.match(/[a-f0-9]{32,128}/)?.[0];
+                if (!t) return setPasteErr("Não achei um link válido aí.");
+                setState((s) => ({ ...s, claude: { token: t, createdAt: Date.now(), used: false } }));
+                setPaste("");
+              }}>Entrar</button>
+            </div>
+            {pasteErr && <p className="text-xs text-[var(--warn)]">{pasteErr}</p>}
+          </div>
+        )}
       </Card>
 
       {state.claude.syncError && (

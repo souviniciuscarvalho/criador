@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   if (!dbConfigured()) return NextResponse.json({ configured: false }, { status: 503 });
   try {
     const ws = workspaceOf(token);
-    const body = (await req.json()) as { references?: Reference[]; projects?: Project[]; deleted?: string[] };
+    const body = (await req.json()) as { references?: Reference[]; projects?: Project[]; deleted?: string[]; hydrated?: boolean };
     const incoming = Array.isArray(body.references) ? body.references.filter((r) => r && typeof r.id === "string") : [];
     const server = await listRows<Reference>("criador_references", ws);
     const byId = new Map(server.map((r) => [r.id, r]));
@@ -22,7 +22,8 @@ export async function POST(req: Request) {
       return s?.source === "claude" && r.study?.source !== "claude" ? { ...r, study: s } : r;
     });
     await upsertRows("criador_references", ws, merged, { updated_at: new Date().toISOString() });
-    await deleteMissing("criador_references", ws, merged.map((r) => r.id));
+    // só apaga referências do servidor quando este navegador já trouxe o que existia
+    if (body.hydrated) await deleteMissing("criador_references", ws, merged.map((r) => r.id));
     // conteúdos: vence a versão mais recente (updatedAt); exclusões vão por lista
     if (Array.isArray(body.deleted)) await deleteContents(ws, body.deleted.filter((x): x is string => typeof x === "string"));
     const current = new Map((await listRows<Project>("criador_contents", ws)).map((p) => [p.id, p]));
@@ -40,7 +41,10 @@ export async function POST(req: Request) {
       status: Object.fromEntries(kv[1].map((x) => [x.k.slice(7), JSON.parse(x.v)])),
       ready: ids.map((x) => [x.content_id, x.slide_id]),
     };
-    return NextResponse.json({ configured: true, imagens, used, studies: merged.filter((r) => r.study?.source === "claude").map((r) => ({ id: r.id, study: r.study })), contents, styles });
+    const have = new Set(merged.map((r) => r.id));
+    const refs = body.hydrated ? [] : server.filter((r) => !have.has(r.id));
+    const cfg = JSON.parse((await kvGet(ws, "cfg")) ?? "null");
+    return NextResponse.json({ configured: true, references: refs, cfg, imagens, used, studies: merged.filter((r) => r.study?.source === "claude").map((r) => ({ id: r.id, study: r.study })), contents, styles });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
