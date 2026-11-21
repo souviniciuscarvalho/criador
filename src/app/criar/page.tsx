@@ -68,6 +68,21 @@ export default function CriarPage() {
     if (!f) return;
     try { patchSlide(si, { bgImage: await fitImage(f), bgDim: slide?.bgDim ?? 0.45 }); } catch { setGen((g) => ({ ...g, err: "Não consegui abrir essa imagem." })); }
   }
+  const [fig, setFig] = useState("");
+  async function importFigma() {
+    if (!conn.keys.figma) { setGen((g) => ({ ...g, err: "Salve o token do Figma em Conexões → Integrações." })); return; }
+    setGen((g) => ({ ...g, busy: true, err: "" }));
+    try {
+      const r = await fetch("/api/figma", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: conn.keys.figma, url: fig }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "falha ao importar");
+      patchSlide(si, { bgImage: await fitImage(j.image), bgDim: 0 });
+      setFig("");
+      setGen((g) => ({ ...g, busy: false }));
+    } catch (e) {
+      setGen((g) => ({ ...g, busy: false, err: e instanceof Error ? e.message : "falha ao importar" }));
+    }
+  }
   async function generate() {
     const base = slide?.imageIdea?.trim() || slide?.title || "";
     const prompt = (gen.idea === slide?.id && gen.prompt ? gen.prompt : base).trim();
@@ -255,6 +270,10 @@ export default function CriarPage() {
                       <input type="file" accept="image/*" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ""; }} />
                     </label>
                     {slide.bgImage && <button className="btn btn-ghost" onClick={() => patchSlide(si, { bgImage: undefined })}><X size={14} /> Tirar</button>}
+                  </div>
+                  <div className="flex gap-2">
+                    <input className="input" placeholder="Link de um quadro do Figma" value={fig} onChange={(e) => setFig(e.target.value)} />
+                    <button className="btn btn-ghost" disabled={gen.busy || !fig.trim()} onClick={importFigma}>Importar</button>
                   </div>
                   {slide.bgImage && (
                     <div><span className="label">Escurecer a foto ({Math.round((slide.bgDim ?? 0.45) * 100)}%)</span>
