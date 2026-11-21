@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dbConfigured, deleteMissing, listRows, upsertRows, validToken, wasUsed, workspaceOf } from "@/lib/server/db";
+import { dbConfigured, deleteMissing, listRows, listStyles, upsertRows, validToken, wasUsed, workspaceOf } from "@/lib/server/db";
 import type { Project, Reference } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -23,8 +23,8 @@ export async function POST(req: Request) {
     });
     await upsertRows("criador_references", ws, merged, { updated_at: new Date().toISOString() });
     await deleteMissing("criador_references", ws, merged.map((r) => r.id));
-    const [contents, used] = await Promise.all([listRows<Project>("criador_contents", ws), wasUsed(ws)]);
-    return NextResponse.json({ configured: true, used, studies: merged.filter((r) => r.study?.source === "claude").map((r) => ({ id: r.id, study: r.study })), contents });
+    const [contents, used, styles] = await Promise.all([listRows<Project>("criador_contents", ws), wasUsed(ws), listStyles(ws)]);
+    return NextResponse.json({ configured: true, used, studies: merged.filter((r) => r.study?.source === "claude").map((r) => ({ id: r.id, study: r.study })), contents, styles });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

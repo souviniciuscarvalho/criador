@@ -1,5 +1,5 @@
 import { FORMATS, uid, type Project, type Reference, type Slide } from "@/lib/types";
-import { listRows, upsertRows } from "./db";
+import { getStyle, listPrints, listRows, listStyles, putStyle, upsertRows } from "./db";
 
 type Json = Record<string, unknown>;
 
@@ -52,6 +52,74 @@ export const TOOLS = [
         },
       },
       required: ["titulo", "formato", "slides"],
+    },
+  },
+  {
+    name: "listar_estilos",
+    description: "Lista os estilos visuais cadastrados (cada um é uma pasta de prints de carrosséis) e se já foram analisados.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "instrucoes_estilo",
+    description: "Instruções de como estudar os prints de um estilo e o que salvar. Chame ANTES de prints_do_estilo e salvar_estilo.",
+    inputSchema: { type: "object", properties: { estilo_id: { type: "string" } }, required: ["estilo_id"] },
+  },
+  {
+    name: "prints_do_estilo",
+    description: "Devolve as imagens (prints) enviadas para o estilo, para você estudar o visual.",
+    inputSchema: { type: "object", properties: { estilo_id: { type: "string" } }, required: ["estilo_id"] },
+  },
+  {
+    name: "ler_estilo",
+    description: "Mostra a análise já salva de um estilo: guia, fontes, paleta e componentes. Use ao criar conteúdo nesse estilo.",
+    inputSchema: { type: "object", properties: { estilo_id: { type: "string" } }, required: ["estilo_id"] },
+  },
+  {
+    name: "salvar_estilo",
+    description:
+      "Salva a análise do estilo: guia de regras, fontes, paleta, componentes (peças reutilizáveis) e recriações dos prints (um slide por print). Cores sempre em #rrggbb.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        estilo_id: { type: "string" },
+        guia: { type: "string", description: "Regras do estilo em texto corrido: fundo, título, tipografia, composição, elementos gráficos, o que evitar." },
+        fonte_titulo: { type: "string" },
+        fonte_corpo: { type: "string" },
+        paleta: { type: "array", items: { type: "string" }, description: "3 a 6 cores #rrggbb" },
+        componentes: {
+          type: "array",
+          description: "10 a 12 peças reutilizáveis do estilo (ex.: tira de título, selo, botão CTA, lista).",
+          items: {
+            type: "object",
+            properties: {
+              nome: { type: "string" },
+              descricao: { type: "string", description: "Como a peça é montada e quando usar" },
+              fundo: { type: "string" },
+              cor_texto: { type: "string" },
+              destaque: { type: "string" },
+              exemplo: { type: "string", description: "Texto de exemplo curto" },
+            },
+            required: ["nome", "descricao"],
+          },
+        },
+        recriados: {
+          type: "array",
+          description: "Uma recriação por print, no formato de slide",
+          items: {
+            type: "object",
+            properties: {
+              titulo: { type: "string" },
+              texto: { type: "string" },
+              fundo: { type: "string" },
+              cor_texto: { type: "string" },
+              destaque: { type: "string" },
+              alinhamento: { type: "string", enum: ["left", "center"] },
+            },
+            required: ["titulo"],
+          },
+        },
+      },
+      required: ["estilo_id", "guia"],
     },
   },
   {
@@ -113,6 +181,70 @@ export async function callTool(ws: string, name: string, args: Json) {
     };
     await upsertRows("criador_contents", ws, [p], { source: "claude" });
     return text(`Conteúdo “${p.title}” criado (${slides.length} slide(s)). Ele aparece na aba Criar do Criador.`);
+  }
+  if (name === "listar_estilos") {
+    const st = await listStyles(ws);
+    return text(st.length ? st.map((x) => `- ${x.id} · ${x.name} · ${x.printCount ?? 0} print(s) · ${x.status}`).join("\n") : "Nenhum estilo cadastrado ainda.");
+  }
+  if (name === "instrucoes_estilo") {
+    const st = await getStyle(ws, str(args.estilo_id));
+    if (!st) return { ...text("Estilo não encontrado."), isError: true };
+    return text(
+      `Estilo “${st.name}”. Passo a passo:\n` +
+        "1. Chame prints_do_estilo e olhe cada print com atenção.\n" +
+        "2. Descreva o visual: fundo (cor, foto, grão), tipografia (fontes, pesos, tamanhos, caixa alta), composição (alinhamento, hierarquia, margens), elementos gráficos (tiras, selos, rabiscos, setas, botões) e o tom.\n" +
+        "3. Extraia 10 a 12 componentes reutilizáveis, cada um com nome, descrição de como montar e cores.\n" +
+        "4. Faça uma recriação por print como slide (título, texto, fundo, cor_texto, destaque, alinhamento).\n" +
+        "5. Chame salvar_estilo com guia, fonte_titulo, fonte_corpo, paleta (3 a 6 cores #rrggbb), componentes e recriados.\n" +
+        "Escreva o guia como regras que outra IA possa seguir ao criar carrosséis neste estilo.",
+    );
+  }
+  if (name === "prints_do_estilo") {
+    const prints = await listPrints(ws, str(args.estilo_id));
+    if (!prints.length) return { ...text("Este estilo não tem prints."), isError: true };
+    return {
+      content: prints.flatMap((p, i) => [
+        { type: "text", text: `Print ${i + 1} de ${prints.length}` },
+        { type: "image", data: p.replace(/^data:image\/jpeg;base64,/, ""), mimeType: "image/jpeg" },
+      ]),
+    };
+  }
+  if (name === "ler_estilo") {
+    const st = await getStyle(ws, str(args.estilo_id));
+    if (!st) return { ...text("Estilo não encontrado."), isError: true };
+    return text(JSON.stringify(st, null, 2));
+  }
+  if (name === "salvar_estilo") {
+    const st = await getStyle(ws, str(args.estilo_id));
+    if (!st) return { ...text("Estilo não encontrado."), isError: true };
+    const cores = (a: unknown) => (Array.isArray(a) ? a.filter((c): c is string => typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c)).slice(0, 8) : []);
+    st.guide = str(args.guia).slice(0, 20000);
+    st.fonts = { title: str(args.fonte_titulo).slice(0, 60), body: str(args.fonte_corpo).slice(0, 60) };
+    st.palette = cores(args.paleta);
+    st.components = (Array.isArray(args.componentes) ? (args.componentes as Json[]) : []).slice(0, 20).map((c) => ({
+      id: uid(),
+      name: str(c.nome).slice(0, 60),
+      description: str(c.descricao).slice(0, 600),
+      bg: color(c.fundo, "#111827"),
+      fg: color(c.cor_texto, "#f9fafb"),
+      accent: color(c.destaque, "#ff7a00"),
+      sample: str(c.exemplo).slice(0, 80),
+    }));
+    st.recreated = (Array.isArray(args.recriados) ? (args.recriados as Json[]) : []).slice(0, 8).map((s) => ({
+      id: uid(),
+      title: str(s.titulo).slice(0, 200),
+      body: str(s.texto).slice(0, 800),
+      bg: color(s.fundo, "#111827"),
+      fg: color(s.cor_texto, "#f9fafb"),
+      accent: color(s.destaque, "#a78bfa"),
+      align: s.alinhamento === "center" ? "center" : "left",
+      titleSize: 84,
+      bodySize: 44,
+    }));
+    st.status = "analisado";
+    st.rev = Date.now();
+    await putStyle(ws, st);
+    return text(`Estilo “${st.name}” salvo: ${st.components && (st.components as unknown[]).length} componente(s), ${(st.recreated as unknown[]).length} recriação(ões). Ele já aparece na aba Estilos do Criador.`);
   }
   if (name === "listar_conteudos") {
     const c = await listRows<Project>("criador_contents", ws);

@@ -6,6 +6,7 @@ const KEY = "criador:v1";
 const empty: AppState = {
   projects: [],
   references: [],
+  styles: [],
   claude: { token: "", createdAt: 0 },
   connections: {
     keys: {},

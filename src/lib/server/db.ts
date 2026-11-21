@@ -57,3 +57,44 @@ export async function deleteMissing(table: "criador_references", ws: string, kee
   const filter = keepIds.length ? `&id=not.in.(${keepIds.map((i) => `"${i.replace(/"/g, "")}"`).join(",")})` : "";
   await rest(`${table}?workspace=eq.${q(ws)}${filter}`, { method: "DELETE", prefer: "return=minimal" });
 }
+
+// ---------- Estilos ----------
+export type StyleMeta = Record<string, unknown> & { id: string };
+
+export async function listStyles(ws: string): Promise<StyleMeta[]> {
+  const r = await rest(`criador_styles?workspace=eq.${q(ws)}&select=data&order=updated_at.desc&limit=100`);
+  return (r ?? []).map((x: { data: StyleMeta }) => x.data);
+}
+
+export async function getStyle(ws: string, id: string): Promise<StyleMeta | null> {
+  const r = await rest(`criador_styles?workspace=eq.${q(ws)}&id=eq.${q(id)}&select=data&limit=1`);
+  return r?.[0]?.data ?? null;
+}
+
+export async function putStyle(ws: string, style: StyleMeta) {
+  await rest("criador_styles?on_conflict=workspace,id", {
+    method: "POST",
+    prefer: "resolution=merge-duplicates,return=minimal",
+    body: JSON.stringify([{ workspace: ws, id: style.id, data: style, updated_at: new Date().toISOString() }]),
+  });
+}
+
+export async function deleteStyle(ws: string, id: string) {
+  await rest(`criador_prints?workspace=eq.${q(ws)}&style_id=eq.${q(id)}`, { method: "DELETE", prefer: "return=minimal" });
+  await rest(`criador_styles?workspace=eq.${q(ws)}&id=eq.${q(id)}`, { method: "DELETE", prefer: "return=minimal" });
+}
+
+export async function replacePrints(ws: string, styleId: string, prints: string[]) {
+  await rest(`criador_prints?workspace=eq.${q(ws)}&style_id=eq.${q(styleId)}`, { method: "DELETE", prefer: "return=minimal" });
+  if (!prints.length) return;
+  await rest("criador_prints", {
+    method: "POST",
+    prefer: "return=minimal",
+    body: JSON.stringify(prints.map((data, idx) => ({ workspace: ws, style_id: styleId, idx, data }))),
+  });
+}
+
+export async function listPrints(ws: string, styleId: string): Promise<string[]> {
+  const r = await rest(`criador_prints?workspace=eq.${q(ws)}&style_id=eq.${q(styleId)}&select=data&order=idx.asc&limit=12`);
+  return (r ?? []).map((x: { data: string }) => x.data);
+}

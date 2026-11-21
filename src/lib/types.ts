@@ -58,6 +58,30 @@ export interface Reference {
   createdAt: number;
 }
 
+export interface StyleComponent {
+  id: string;
+  name: string;
+  description: string;
+  bg: string;
+  fg: string;
+  accent: string;
+  sample: string;
+}
+
+export interface Style {
+  id: string;
+  name: string;
+  prints: string[]; // data URLs (só no navegador; o servidor guarda à parte)
+  status: "novo" | "analisado";
+  guide: string;
+  fonts: { title: string; body: string };
+  palette: string[];
+  components: StyleComponent[];
+  recreated: Slide[];
+  rev: number; // versão vinda do servidor
+  createdAt: number;
+}
+
 export interface ClaudeConnection {
   token: string; // segredo do link MCP (vazio = sem link)
   createdAt: number;
@@ -78,6 +102,7 @@ export interface Connections {
 export interface AppState {
   projects: Project[];
   references: Reference[];
+  styles: Style[];
   claude: ClaudeConnection;
   connections: Connections;
 }

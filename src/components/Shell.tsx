@@ -2,10 +2,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSync } from "@/lib/sync";
-import { BookMarked, PenSquare, Plug } from "lucide-react";
+import { BookMarked, Palette, PenSquare, Plug } from "lucide-react";
 
 const sections = [
   { title: "Criar", items: [{ href: "/criar", label: "Criar", icon: PenSquare }] },
+  { title: "Seu visual", items: [{ href: "/estilos", label: "Estilos", icon: Palette }] },
   {
     title: "Seu material",
     items: [
