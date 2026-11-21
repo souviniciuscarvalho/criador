@@ -15,6 +15,7 @@ async function handle(ws: string, m: Rpc) {
   const err = (code: number, message: string) => ({ jsonrpc: "2.0", id: m.id, error: { code, message } });
   switch (m.method) {
     case "initialize":
+      await touch(ws).catch(() => {}); // o Claude acabou de se conectar
       return ok({
         protocolVersion: (m.params?.protocolVersion as string) ?? "2025-03-26",
         capabilities: { tools: {} },
@@ -24,6 +25,7 @@ async function handle(ws: string, m: Rpc) {
     case "ping":
       return ok({});
     case "tools/list":
+      await touch(ws).catch(() => {});
       return ok({ tools: TOOLS });
     case "tools/call": {
       try {

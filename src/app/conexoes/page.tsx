@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { useApp, setState } from "@/lib/store";
 import { Card, CopyButton, Status, Steps } from "@/components/ConnUI";
@@ -11,6 +12,7 @@ function genToken() {
 
 export default function ClaudePage() {
   const { state, ready } = useApp();
+  const [shown, setShown] = useState(false); // o link só aparece inteiro logo depois de gerar
   if (!ready) return null;
   const origin = window.location.origin;
 
@@ -18,7 +20,7 @@ export default function ClaudePage() {
   const url = token ? `${origin}/api/mcp/${token}` : "";
   const masked = token ? `${origin}/api/mcp/••••••••` : "";
   const when = createdAt ? new Date(createdAt).toLocaleString("pt-BR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
-  const gen = () => setState((s) => ({ ...s, claude: { token: genToken(), createdAt: Date.now(), used: false } }));
+  const gen = () => { setState((s) => ({ ...s, claude: { token: genToken(), createdAt: Date.now(), used: false } })); setShown(true); };
 
   return (
     <>
@@ -48,8 +50,8 @@ export default function ClaudePage() {
             {token && (
               <div>
                 <span className="label">Seu link do Criador</span>
-                <code className="block overflow-x-auto rounded-lg bg-panel2 px-3 py-2 text-xs">{masked}</code>
-                <p className="mt-1 text-xs">É como uma senha: só você usa.</p>
+                <code className="block overflow-x-auto rounded-lg bg-panel2 px-3 py-2 text-xs">{shown ? url : masked}</code>
+                <p className="mt-1 text-xs">{shown ? "Copie agora: quando você sair ou atualizar a página, o link some da tela (o botão Copiar link continua). " : ""}É como uma senha: só você usa.</p>
               </div>
             )}
           </div>,
