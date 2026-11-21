@@ -9,7 +9,7 @@ export default function ConexoesLayout({ children }: LayoutProps<"/conexoes">) {
   const c = state.connections;
   const k = c.keys;
   const tabs = [
-    { href: "/conexoes", label: "Claude", ok: !!state.claude.token },
+    { href: "/conexoes", label: "Claude", ok: !!state.claude.used },
     { href: "/conexoes/imagens", label: "Imagens", ok: !!(k.iagen || k.openai || k.gemini) },
     { href: "/conexoes/integracoes", label: "Integrações", ok: !!(k.figma || k.producthunt || k.redditId) },
   ];
