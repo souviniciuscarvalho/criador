@@ -19,6 +19,8 @@ export default function CriarPage() {
   const { state, ready } = useApp();
   const [curId, setCurId] = useState<string | null>(null);
   const [idx, setIdx] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const [idea, setIdea] = useState("");
 
   const proj = state.projects.find((p) => p.id === (curId ?? state.projects[0]?.id));
 
@@ -29,8 +31,12 @@ export default function CriarPage() {
       projects: s.projects.map((p) => (p.id === proj.id ? { ...fn(p), updatedAt: Date.now() } : p)),
     }));
   }
-  function create(format: Project["format"]) {
+  function create(format: Project["format"], ideaText = "") {
     const p = newProject(format);
+    if (ideaText.trim()) {
+      p.title = ideaText.trim().slice(0, 60);
+      p.slides[0].title = ideaText.trim().slice(0, 90);
+    }
     setState((s) => ({ ...s, projects: [p, ...s.projects] }));
     setCurId(p.id);
     setIdx(0);
@@ -45,10 +51,11 @@ export default function CriarPage() {
     return (
       <div className="mx-auto max-w-3xl">
         <h1 className="text-2xl font-bold">O que vamos criar?</h1>
-        <p className="mt-1 text-muted">Escolha o formato. Você pode ajustar o tamanho depois.</p>
+        <p className="mt-1 text-muted">Escreva sua ideia (opcional) e escolha o formato.</p>
+        <textarea className="input mt-4" rows={3} placeholder="Ex.: 5 erros que travam o crescimento do seu perfil" value={idea} onChange={(e) => setIdea(e.target.value)} />
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           {FORMATS.map((f) => (
-            <button key={f.id} onClick={() => create(f.id)} className="rounded-xl border border-line bg-panel p-5 text-left hover:border-accent">
+            <button key={f.id} onClick={() => create(f.id, idea)} className="rounded-xl border border-line bg-panel p-5 text-left hover:border-[#5a5a5a]">
               <div className="font-semibold">{f.label}</div>
               <div className="text-sm text-muted">{f.hint}</div>
             </button>
@@ -97,7 +104,7 @@ export default function CriarPage() {
               <span className="label">Formato</span>
               <div className="flex flex-wrap gap-1.5">
                 {FORMATS.map((f) => (
-                  <button key={f.id} className={`chip ${proj.format === f.id ? "!border-accent !text-fg" : ""}`}
+                  <button key={f.id} className={`chip ${proj.format === f.id ? "chip-on" : ""}`}
                     onClick={() => update((p) => ({ ...p, format: f.id, width: f.width, height: f.height, slides: f.multi ? p.slides : p.slides.slice(0, 1) }))}>
                     {f.label}
                   </button>
@@ -146,7 +153,7 @@ export default function CriarPage() {
             <span className="label">Slides ({proj.slides.length})</span>
             <div className="flex gap-2 overflow-x-auto pb-2">
               {proj.slides.map((s, i) => (
-                <div key={s.id} className={`w-24 shrink-0 rounded-lg border-2 ${i === idx ? "border-accent" : "border-transparent"}`}>
+                <div key={s.id} className={`w-24 shrink-0 rounded-lg border-2 ${i === idx ? "border-white" : "border-transparent"}`}>
                   <SlidePreview slide={s} width={proj.width} height={proj.height} onClick={() => setIdx(i)} className="cursor-pointer" />
                 </div>
               ))}
@@ -182,11 +189,28 @@ export default function CriarPage() {
             Padrões das referências: {[...new Set(chosen.flatMap((r) => r.study?.tags ?? []))].join(", ") || "—"}
           </div>
         )}
-        <button className="btn w-full justify-center" disabled={!state.claude.enabled}
-          title={state.claude.enabled ? "" : "Configure a conexão com o Claude em Conexões"}>
-          <Sparkles size={16} /> Gerar texto com Claude
-        </button>
-        {!state.claude.enabled && <p className="text-xs text-muted">Disponível quando a conexão com o Claude Code estiver configurada.</p>}
+        <div className="space-y-2 border-t border-line pt-3">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Sparkles size={15} /> Pedir ao Claude
+            <span className={`dot ml-auto ${state.claude.token ? "dot-ok" : ""}`} />
+          </div>
+          <p className="text-xs text-muted">
+            {state.claude.token
+              ? "Copie o pedido e cole numa conversa do Claude com o conector Criador ligado."
+              : "Ligue o Claude em Conexões para o texto ser escrito por ele, no seu plano, sem chave de API."}
+          </p>
+          <button className="btn btn-ghost w-full justify-center" onClick={() => {
+            const refNames = chosen.map((r) => `“${r.name}”`).join(", ");
+            const txt = `Crie um conteúdo de ${fmt.label.toLowerCase()} chamado “${proj.title}”` +
+              (refNames ? `, usando como base as referências ${refNames}` : "") +
+              ". Escreva título e texto de cada slide.";
+            navigator.clipboard?.writeText(txt);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          }}>
+            <Copy size={15} /> {copied ? "Copiado!" : "Copiar pedido"}
+          </button>
+        </div>
       </aside>
     </div>
   );

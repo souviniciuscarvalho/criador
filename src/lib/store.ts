@@ -6,7 +6,14 @@ const KEY = "criador:v1";
 const empty: AppState = {
   projects: [],
   references: [],
-  claude: { endpoint: "", token: "", enabled: false },
+  claude: { token: "", createdAt: 0 },
+  connections: {
+    keys: {},
+    imageDefault: "",
+    geminiModel: "gemini-3.1-flash-image",
+    openaiModel: "gpt-image-2.5-flare",
+    openaiQuality: "medium",
+  },
 };
 
 let state: AppState = empty;
@@ -18,7 +25,15 @@ function load() {
   loaded = true;
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) state = { ...empty, ...JSON.parse(raw) };
+    if (raw) {
+      const d = JSON.parse(raw);
+      state = {
+        ...empty,
+        ...d,
+        claude: { ...empty.claude, token: d.claude?.token ?? "", createdAt: d.claude?.createdAt ?? 0 },
+        connections: { ...empty.connections, ...d.connections },
+      };
+    }
   } catch {
     /* ignora dados corrompidos */
   }

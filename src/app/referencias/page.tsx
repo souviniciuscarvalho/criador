@@ -55,9 +55,9 @@ export default function ReferenciasPage() {
 
       {niches.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-1.5">
-          <button className={`chip ${!filter ? "!border-accent !text-fg" : ""}`} onClick={() => setFilter("")}>Todos</button>
+          <button className={`chip ${!filter ? "chip-on" : ""}`} onClick={() => setFilter("")}>Todos</button>
           {niches.map((n) => (
-            <button key={n} className={`chip ${filter === n ? "!border-accent !text-fg" : ""}`} onClick={() => setFilter(n)}>{n}</button>
+            <button key={n} className={`chip ${filter === n ? "chip-on" : ""}`} onClick={() => setFilter(n)}>{n}</button>
           ))}
         </div>
       )}

@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "Crie posts de feed, stories e carrosséis para redes sociais.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="pt-BR" className="h-full antialiased">
       <body className="min-h-full">

@@ -59,15 +59,25 @@ export interface Reference {
 }
 
 export interface ClaudeConnection {
-  endpoint: string;
-  token: string;
-  enabled: boolean;
+  token: string; // segredo do link MCP (vazio = sem link)
+  createdAt: number;
+}
+
+export type KeyProvider = "iagen" | "openai" | "gemini" | "figma" | "redditId" | "redditSecret" | "producthunt";
+
+export interface Connections {
+  keys: Partial<Record<KeyProvider, string>>;
+  imageDefault: "iagen" | "magnific" | "openai" | "gemini" | "";
+  geminiModel: string;
+  openaiModel: string;
+  openaiQuality: string;
 }
 
 export interface AppState {
   projects: Project[];
   references: Reference[];
   claude: ClaudeConnection;
+  connections: Connections;
 }
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
