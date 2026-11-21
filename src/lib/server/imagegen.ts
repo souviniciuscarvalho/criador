@@ -1,6 +1,29 @@
 import { getStyle, imgIds, imgPut, kvGet, kvSet, listRows } from "./db";
 import { unseal } from "./crypto";
+import { generateViaMcp } from "./mcpclient";
+import { MAGNIFIC_MCP, magnificToken } from "./magnific";
 import type { Project } from "../types";
+
+export const IAGEN_MCP = "https://k.iamaisgen.com/api/mcp";
+
+// Credencial do provedor guardada no servidor (chave cifrada ou login do Magnific).
+export async function credential(ws: string, provider: string): Promise<string | null> {
+  if (provider === "magnific") return magnificToken(ws);
+  const raw = await kvGet(ws, `key:${provider}`);
+  return raw ? unseal(raw) : null;
+}
+
+export async function viaService(ws: string, provider: string, prompt: string, width: number, height: number): Promise<string> {
+  const cred = await credential(ws, provider);
+  if (!cred) throw new Error(provider === "magnific" ? "O Magnific não está conectado. Conecte em Conexões → Imagens." : "Chave do IA Gen não encontrada. Salve em Conexões → Imagens.");
+  const g = await generateViaMcp(provider === "magnific" ? MAGNIFIC_MCP : IAGEN_MCP, cred, prompt, width, height);
+  await kvSet(ws, `tools:${provider}`, JSON.stringify(g.tools)).catch(() => {});
+  if (!g.image) {
+    await kvSet(ws, `err:${provider}`, g.error ?? "falha").catch(() => {});
+    throw new Error(g.error ?? "O serviço não devolveu imagem.");
+  }
+  return g.image;
+}
 
 export type ImgReq = { provider: string; key: string; model?: string; quality?: string; prompt: string; width: number; height: number };
 
@@ -59,13 +82,13 @@ async function setStatus(ws: string, cid: string, s: ImgStatus) {
 // Prepara a geração das imagens de um conteúdo (uma por lâmina sem imagem).
 export async function prepare(ws: string, cid: string): Promise<{ ok: true; run: () => Promise<void> } | { ok: false; error: string }> {
   const cfg = JSON.parse((await kvGet(ws, "cfg")) ?? "{}") as Cfg;
-  const has = async (p: string) => !!(await kvGet(ws, `key:${p}`));
-  const provider = cfg.imageDefault === "openai" || cfg.imageDefault === "gemini"
-    ? ((await has(cfg.imageDefault)) ? cfg.imageDefault : "")
-    : "";
-  const chosen = provider || ((await has("gemini")) ? "gemini" : (await has("openai")) ? "openai" : "");
-  if (!chosen) return { ok: false, error: "Nenhuma chave de imagem guardada. Salve a da OpenAI ou do Gemini em Conexões → Imagens." };
-  const key = unseal((await kvGet(ws, `key:${chosen}`)) ?? "");
+  const has = async (p: string) => !!(await credential(ws, p).catch(() => null));
+  const order = ["magnific", "iagen", "gemini", "openai"];
+  const first = order.includes(cfg.imageDefault ?? "") ? [cfg.imageDefault!] : [];
+  let chosen = "";
+  for (const p of [...first, ...order]) if (await has(p)) { chosen = p; break; }
+  if (!chosen) return { ok: false, error: "Nenhuma IA de imagem conectada. Conecte uma em Conexões → Imagens." };
+  const key = (chosen === "gemini" || chosen === "openai") ? await credential(ws, chosen) : "service";
   if (!key) return { ok: false, error: "Não consegui ler a chave guardada. Salve-a de novo em Conexões → Imagens." };
   const p = (await listRows<Project>("criador_contents", ws)).find((x) => x.id === cid);
   if (!p) return { ok: false, error: "Conteúdo não encontrado." };
@@ -86,7 +109,9 @@ export async function prepare(ws: string, cid: string): Promise<{ ok: true; run:
           const idea = s.imageIdea?.trim() || `${s.title}. ${s.body}`.slice(0, 400);
           const prompt = `${idea}. Imagem de fundo para post de rede social, sem texto escrito, sem letras.${guide ? ` Estilo visual da marca: ${guide}` : ""}${pal ? ` Cores: ${pal}.` : ""}`;
           try {
-            const img = await makeImage({ provider: chosen, key, model: chosen === "gemini" ? cfg.geminiModel : cfg.openaiModel, quality: cfg.openaiQuality, prompt, width: p.width, height: p.height });
+            const img = chosen === "gemini" || chosen === "openai"
+              ? await makeImage({ provider: chosen, key, model: chosen === "gemini" ? cfg.geminiModel : cfg.openaiModel, quality: cfg.openaiQuality, prompt, width: p.width, height: p.height })
+              : await viaService(ws, chosen, prompt, p.width, p.height);
             if (img.startsWith("data:")) await imgPut(ws, cid, s.id, img);
             else error = error || "A imagem veio como link, não consegui guardar.";
             if (img.startsWith("data:")) done++;

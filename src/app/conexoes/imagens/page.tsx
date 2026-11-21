@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { useApp, setState } from "@/lib/store";
 import { Card, KeyField, Status, Steps } from "@/components/ConnUI";
 import type { Connections } from "@/lib/types";
@@ -7,7 +8,30 @@ const ext = (href: string, t: string) => <a className="text-fg underline" href={
 
 export default function ImagensPage() {
   const { state, ready } = useApp();
+  const [mg, setMg] = useState("");
+  useEffect(() => {
+    if (!ready) return;
+    const m = new URLSearchParams(window.location.search).get("magnific");
+    if (!m) return;
+    window.history.replaceState(null, "", "/conexoes/imagens");
+    if (m === "ok") setState((s) => ({ ...s, connections: { ...s.connections, imageDefault: "magnific" } }));
+    Promise.resolve().then(() => setMg(m === "ok" ? "Magnific conectado e escolhido como padrão das imagens." : m === "cancelado" ? "Conexão cancelada." : "Não consegui conectar o Magnific. Tente de novo."));
+  }, [ready]);
   if (!ready) return null;
+  const token = state.claude.token;
+  const im = state.imagens;
+  async function connectMagnific() {
+    if (!token) { setMg("Ligue o Claude primeiro (aba Claude) para ter o seu link."); return; }
+    setMg("");
+    const r = await fetch("/api/magnific/iniciar", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { setMg(j.error ?? "Falha ao iniciar."); return; }
+    window.location.href = j.url;
+  }
+  async function disconnectMagnific() {
+    if (token) await fetch("/api/magnific/desconectar", { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+    setState((s) => ({ ...s, imagens: s.imagens ? { ...s.imagens, keys: { ...s.imagens.keys, magnific: false } } : s.imagens, connections: { ...s.connections, imageDefault: s.connections.imageDefault === "magnific" ? "" : s.connections.imageDefault } }));
+  }
   const c = state.connections;
   const k = c.keys;
   const patch = (p: Partial<Connections>) => setState((s) => ({ ...s, connections: { ...s.connections, ...p } }));
@@ -38,10 +62,26 @@ export default function ImagensPage() {
       </Card>
 
       <Card title="Magnific" desc="Usa os créditos da sua conta do Magnific (antigo Freepik). Não tem chave: você entra com a sua conta."
-        status={<Status ok={false}>em breve</Status>}>
-        <p className="text-sm text-muted">O login com a conta do Magnific precisa do registro do Criador como aplicativo lá. Fica para a próxima etapa.</p>
-        <button className="btn" disabled>Conectar com o Magnific</button>
+        status={<div className="flex items-center gap-3">{badge("magnific", !!im?.keys.magnific)}<Status ok={!!im?.keys.magnific} /></div>}>
+        <Steps items={[
+          <>Clique em Conectar com o Magnific, aqui embaixo.</>,
+          <>O Magnific mostra o aviso <i>Unverified application</i> com o endereço do Criador. É só o Magnific avisando que o Criador vai usar a sua conta. Clique em <b>I recognise it, continue</b>.</>,
+          <>Entre com a sua conta do Magnific (o mesmo e-mail e senha de sempre).</>,
+          <>Pronto: você volta para cá com o Magnific conectado e escolhido como padrão das imagens.</>,
+        ]} />
+        <div className="flex gap-2">
+          <button className="btn" onClick={connectMagnific}>{im?.keys.magnific ? "Conectar de novo" : "Conectar com o Magnific"}</button>
+          {im?.keys.magnific && <button className="btn btn-ghost" onClick={disconnectMagnific}>Desconectar</button>}
+        </div>
+        {mg && <p className="text-sm text-muted">{mg}</p>}
       </Card>
+
+      {(im?.tools || im?.errors) && Object.keys({ ...im.tools, ...im.errors }).length > 0 && (
+        <Card title="Último teste de imagem" desc="Aparece depois da primeira imagem gerada por IA Gen ou Magnific.">
+          {Object.entries({ ...im.tools }).map(([k, v]) => <p key={k} className="text-xs text-muted"><b>{k}</b>: ferramentas {v.join(", ") || "nenhuma"}</p>)}
+          {Object.entries({ ...im.errors }).map(([k, v]) => <p key={k} className="text-xs text-[var(--warn)]"><b>{k}</b>: {v}</p>)}
+        </Card>
+      )}
 
       <h3 className="pt-2 text-xs font-medium tracking-widest text-muted uppercase">Com chave de API (para quem já tem conta de desenvolvedor)</h3>
       <Card title="OpenAI" desc="A IA de imagem do ChatGPT, pela chave de API. A OpenAI cobra o uso direto de você."

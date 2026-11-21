@@ -17,14 +17,14 @@ export function useSync() {
   const refKey = JSON.stringify(state.references.map((r) => [r.id, r.study?.source, r.name]));
 
   const c = state.connections;
-  const keySig = JSON.stringify([c.keys.openai ?? "", c.keys.gemini ?? "", c.imageDefault, c.geminiModel, c.openaiModel, c.openaiQuality]);
+  const keySig = JSON.stringify([c.keys.openai ?? "", c.keys.gemini ?? "", c.keys.iagen ?? "", c.imageDefault, c.geminiModel, c.openaiModel, c.openaiQuality]);
   useEffect(() => {
     if (!ready || !token || pushedKeys === token + keySig) return;
     const cc = getState().connections;
     fetch("/api/keys", {
       method: "POST",
       headers: { ...auth(token), "Content-Type": "application/json" },
-      body: JSON.stringify({ keys: { openai: cc.keys.openai ?? "", gemini: cc.keys.gemini ?? "" }, cfg: { imageDefault: cc.imageDefault, geminiModel: cc.geminiModel, openaiModel: cc.openaiModel, openaiQuality: cc.openaiQuality } }),
+      body: JSON.stringify({ keys: { openai: cc.keys.openai ?? "", gemini: cc.keys.gemini ?? "", iagen: cc.keys.iagen ?? "" }, cfg: { imageDefault: cc.imageDefault, geminiModel: cc.geminiModel, openaiModel: cc.openaiModel, openaiQuality: cc.openaiQuality } }),
     }).then((r) => { if (r.ok) pushedKeys = token + keySig; }).catch(() => {});
   }, [ready, token, keySig]);
 
@@ -55,7 +55,7 @@ export function useSync() {
           }
         }
         // imagens geradas no servidor: baixa as que faltam neste navegador
-        const im = j.imagens as { keys: { openai: boolean; gemini: boolean }; status: NonNullable<ReturnType<typeof getState>["imagens"]>["status"]; ready: [string, string][] } | undefined;
+        const im = j.imagens as { keys: { openai: boolean; gemini: boolean; iagen?: boolean; magnific?: boolean }; tools?: Record<string, string[]>; errors?: Record<string, string>; status: NonNullable<ReturnType<typeof getState>["imagens"]>["status"]; ready: [string, string][] } | undefined;
         if (im) {
           for (const [cid, sid] of im.ready) {
             const p = getState().projects.find((x) => x.id === cid);
@@ -73,7 +73,7 @@ export function useSync() {
               .finally(() => fetching.delete(sid));
           }
           const prev = JSON.stringify(getState().imagens ?? null);
-          const next = { keys: im.keys, status: im.status };
+          const next = { keys: im.keys, status: im.status, tools: im.tools, errors: im.errors };
           if (prev !== JSON.stringify(next)) setState((s) => ({ ...s, imagens: next }));
         }
         setState((s) => {

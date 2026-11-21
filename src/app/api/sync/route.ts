@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { dbConfigured, deleteContents, deleteMissing, imgIds, kvList, listRows, listStyles, upsertRows, validToken, wasUsed, workspaceOf } from "@/lib/server/db";
+import { dbConfigured, deleteContents, deleteMissing, imgIds, kvGet, kvList, listRows, listStyles, upsertRows, validToken, wasUsed, workspaceOf } from "@/lib/server/db";
 import type { Project, Reference } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,9 @@ export async function POST(req: Request) {
     const [contents, used, styles] = await Promise.all([listRows<Project>("criador_contents", ws), wasUsed(ws), listStyles(ws)]);
     const [kv, ids] = await Promise.all([kvList(ws, "key:").then(async (k) => [k, await kvList(ws, "status:")] as const), imgIds(ws)]);
     const imagens = {
-      keys: { openai: kv[0].some((x) => x.k === "key:openai"), gemini: kv[0].some((x) => x.k === "key:gemini") },
+      keys: { openai: kv[0].some((x) => x.k === "key:openai"), gemini: kv[0].some((x) => x.k === "key:gemini"), iagen: kv[0].some((x) => x.k === "key:iagen"), magnific: !!(await kvGet(ws, "mg:tok")) },
+      tools: Object.fromEntries((await kvList(ws, "tools:")).map((x) => [x.k.slice(6), JSON.parse(x.v)])),
+      errors: Object.fromEntries((await kvList(ws, "err:")).map((x) => [x.k.slice(4), x.v])),
       status: Object.fromEntries(kv[1].map((x) => [x.k.slice(7), JSON.parse(x.v)])),
       ready: ids.map((x) => [x.content_id, x.slide_id]),
     };

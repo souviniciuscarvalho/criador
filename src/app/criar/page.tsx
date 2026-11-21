@@ -62,7 +62,9 @@ export default function CriarPage() {
 
   const [gen, setGen] = useState<{ busy: boolean; err: string; prompt: string; idea: string }>({ busy: false, err: "", prompt: "", idea: "" });
   const conn = state.connections;
-  const provider = conn.imageDefault === "gemini" || conn.imageDefault === "openai" ? conn.imageDefault : conn.keys.gemini ? "gemini" : conn.keys.openai ? "openai" : "";
+  const ik = state.imagens?.keys;
+  const can = (p: string) => (p === "magnific" ? !!ik?.magnific : p === "iagen" ? !!(ik?.iagen || conn.keys.iagen) : !!conn.keys[p as "openai" | "gemini"]);
+  const provider = (["magnific", "iagen", "gemini", "openai"] as const).find((p) => p === conn.imageDefault && can(p)) ?? (["magnific", "iagen", "gemini", "openai"] as const).find(can) ?? "";
 
   async function upload(f?: File) {
     if (!f) return;
@@ -95,13 +97,13 @@ export default function CriarPage() {
   async function generate() {
     const base = slide?.imageIdea?.trim() || slide?.title || "";
     const prompt = (gen.idea === slide?.id && gen.prompt ? gen.prompt : base).trim();
-    if (!provider) { setGen((g) => ({ ...g, err: "Salve a chave da OpenAI ou do Gemini em Conexões → Imagens." })); return; }
+    if (!provider) { setGen((g) => ({ ...g, err: "Conecte uma IA de imagem em Conexões → Imagens." })); return; }
     setGen((g) => ({ ...g, busy: true, err: "" }));
     try {
       const r = await fetch("/api/imagem", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json", ...(state.claude.token ? { Authorization: `Bearer ${state.claude.token}` } : {}) },
         body: JSON.stringify({
-          provider, key: conn.keys[provider], prompt: `${prompt}. Imagem de fundo para post de rede social, sem texto escrito, sem letras.`,
+          provider, key: provider === "gemini" || provider === "openai" ? conn.keys[provider] : undefined, prompt: `${prompt}. Imagem de fundo para post de rede social, sem texto escrito, sem letras.`,
           model: provider === "gemini" ? conn.geminiModel : conn.openaiModel, quality: conn.openaiQuality, width: proj?.width, height: proj?.height,
         }),
       });
@@ -273,7 +275,7 @@ export default function CriarPage() {
                     value={gen.idea === slide.id ? gen.prompt : ""} onChange={(e) => setGen((g) => ({ ...g, idea: slide.id, prompt: e.target.value }))} />
                   <div className="flex flex-wrap gap-2">
                     <button className="btn" disabled={gen.busy} onClick={generate}>
-                      {gen.busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Gerar com IA{provider ? ` (${provider === "gemini" ? "Gemini" : "OpenAI"})` : ""}
+                      {gen.busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Gerar com IA{provider ? ` (${({ gemini: "Gemini", openai: "OpenAI", iagen: "IA Gen", magnific: "Magnific" } as const)[provider]})` : ""}
                     </button>
                     <label className="btn btn-ghost cursor-pointer"><ImagePlus size={15} /> Enviar foto
                       <input type="file" accept="image/*" hidden onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ""; }} />
@@ -289,7 +291,7 @@ export default function CriarPage() {
                       <input type="range" min={0} max={85} className="w-full" value={Math.round((slide.bgDim ?? 0.45) * 100)} onChange={(e) => patchSlide(si, { bgDim: +e.target.value / 100 })} /></div>
                   )}
                   {gen.err && <p className="text-xs text-red-400">{gen.err}</p>}
-                  {!provider && <p className="text-xs text-muted">Para gerar com IA, salve a chave em <Link className="underline" href="/conexoes/imagens">Conexões → Imagens</Link>. Enviar foto funciona sem chave. As fotos ficam só neste navegador.</p>}
+                  {!provider && <p className="text-xs text-muted">Para gerar com IA, conecte uma IA de imagem em <Link className="underline" href="/conexoes/imagens">Conexões → Imagens</Link>. Enviar foto funciona sem chave. As fotos ficam só neste navegador.</p>}
                 </div>
                 <div>
                   <span className="label">Componentes do estilo</span>
@@ -319,7 +321,7 @@ export default function CriarPage() {
               <span className="text-muted">
                 {imgSt?.state === "gerando" ? `Gerando ${imgSt.done}/${imgSt.total}… pode fechar, continua no servidor.`
                   : imgSt?.state === "pronto" ? "Imagens prontas." : imgSt?.state === "erro" ? `Algumas falharam: ${imgSt.error}`
-                  : state.imagens && !state.imagens.keys.openai && !state.imagens.keys.gemini ? "Salve a chave de imagem em Conexões → Imagens." : "Quando o Claude terminar o visual, as imagens saem sozinhas."}
+                  : state.imagens && !provider ? "Conecte uma IA de imagem em Conexões → Imagens." : "Quando o Claude terminar o visual, as imagens saem sozinhas."}
               </span>
             </div>
 

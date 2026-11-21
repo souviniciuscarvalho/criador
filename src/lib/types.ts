@@ -131,7 +131,7 @@ export interface AppState {
   defaultStyleId: string;
   claude: ClaudeConnection;
   connections: Connections;
-  imagens?: { keys: { openai: boolean; gemini: boolean }; status: Record<string, { state: "gerando" | "pronto" | "erro"; done: number; total: number; error?: string }> };
+  imagens?: { keys: { openai: boolean; gemini: boolean; iagen?: boolean; magnific?: boolean }; tools?: Record<string, string[]>; errors?: Record<string, string>; status: Record<string, { state: "gerando" | "pronto" | "erro"; done: number; total: number; error?: string }> };
 }
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);

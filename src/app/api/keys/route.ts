@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const ws = workspaceOf(token);
   const b = (await req.json().catch(() => ({}))) as { keys?: Record<string, unknown>; cfg?: Record<string, unknown> };
   try {
-    for (const p of ["openai", "gemini"]) {
+    for (const p of ["openai", "gemini", "iagen"]) {
       const v = b.keys?.[p];
       if (typeof v !== "string") continue;
       if (v.trim()) await kvSet(ws, `key:${p}`, seal(v.trim().slice(0, 300)));
